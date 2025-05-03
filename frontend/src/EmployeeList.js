@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 function EmployeeList() {
   const [employees, setEmployees] = useState([]);
@@ -20,10 +21,10 @@ function EmployeeList() {
   if (loading) return <div>Loading...</div>;
 
   return (
-    <div>
-      <h2>Employee List</h2>
-      <table border="1" cellPadding="8">
-        <thead>
+    <div className="container mt-4">
+      <h2 className="mb-4">Employee List</h2>
+      <table className="table table-striped table-bordered">
+        <thead className="table-dark">
           <tr>
             <th>Name</th>
             <th>Address</th>
