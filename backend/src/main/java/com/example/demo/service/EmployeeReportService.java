@@ -24,9 +24,22 @@ public class EmployeeReportService {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("createdBy", "Jasper Report System");
 
+        // Don't close these streams - let JasperReports handle them
+        InputStream logoLeftStream = new ClassPathResource("logo.png").getInputStream();
+        InputStream logoRightStream = new ClassPathResource("organization_logo.png").getInputStream();
+        parameters.put("logoLeft", logoLeftStream);
+        parameters.put("logoRight", logoRightStream);
+
         InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream();
         JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
         JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, dataSource);
-        return JasperExportManager.exportReportToPdf(jasperPrint);
+        byte[] pdfBytes = JasperExportManager.exportReportToPdf(jasperPrint);
+
+        // Close streams after PDF generation
+        logoLeftStream.close();
+        logoRightStream.close();
+        reportStream.close();
+
+        return pdfBytes;
     }
-} 
+}
