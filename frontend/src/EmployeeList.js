@@ -18,11 +18,41 @@ function EmployeeList() {
       });
   }, []);
 
+  const handleExport = (type) => {
+    const url = type === "pdf"
+      ? "/api/reports/employees/pdf"
+      : "/api/reports/employees/excel";
+    fetch(url, {
+      method: "GET",
+    })
+      .then((response) => response.blob())
+      .then((blob) => {
+        const fileURL = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = fileURL;
+        a.download = type === "pdf" ? "employee_report.pdf" : "employee_report.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      })
+      .catch((err) => alert("Failed to export: " + err));
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
     <div className="container mt-4">
-      <h2 className="mb-4">Employee List</h2>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>Employee List</h2>
+        <div>
+          <button className="btn btn-danger me-2" onClick={() => handleExport("pdf")}>
+            Export PDF
+          </button>
+          <button className="btn btn-success" onClick={() => handleExport("excel")}>
+            Export Excel
+          </button>
+        </div>
+      </div>
       <table className="table table-striped table-bordered">
         <thead className="table-dark">
           <tr>
