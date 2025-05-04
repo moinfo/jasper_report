@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import ReportTemplateEditor from './ReportTemplateEditor';
-import ReportVisualEditor from './ReportVisualEditor';
 
 function EmployeeList() {
   const [employees, setEmployees] = useState([]);
@@ -59,7 +58,6 @@ function EmployeeList() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Employee List</h2>
         <div>
-          <ReportVisualEditor />
           <ReportTemplateEditor />
           <button className="btn btn-primary me-2" onClick={handlePreview}>
             Preview Report
