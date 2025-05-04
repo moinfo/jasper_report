@@ -1,8 +1,9 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.Employee;
-import com.example.demo.entity.ReportTemplate;
+import com.example.demo.entity.ReportDesign;
 import com.example.demo.repository.EmployeeRepository;
+import com.example.demo.repository.ReportDesignRepository;
 import net.sf.jasperreports.engine.*;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class EmployeeReportService {
@@ -23,24 +25,36 @@ public class EmployeeReportService {
     private EmployeeRepository employeeRepository;
 
     @Autowired
-    private ReportTemplateService templateService;
+    private ReportDesignRepository reportDesignRepository;
 
     public String getReportDesign() throws Exception {
-        return templateService.getActiveTemplate("employee_report")
-                .map(ReportTemplate::getJrxmlContent)
-                .orElseGet(() -> {
-                    try {
-                        return loadDefaultTemplate();
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to load default template", e);
-                    }
-                });
+        // First try to get from database
+        Optional<ReportDesign> existingDesign = reportDesignRepository.findByReportName("employee_report");
+        if (existingDesign.isPresent()) {
+            return existingDesign.get().getDesignContent();
+        }
+
+        // If not in database, get from classpath
+        try (InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream()) {
+            String defaultDesign = StreamUtils.copyToString(reportStream, StandardCharsets.UTF_8);
+            
+            // Save default design to database
+            ReportDesign reportDesign = new ReportDesign();
+            reportDesign.setReportName("employee_report");
+            reportDesign.setDesignContent(defaultDesign);
+            reportDesignRepository.save(reportDesign);
+            
+            return defaultDesign;
+        }
     }
 
-    private String loadDefaultTemplate() throws Exception {
-        try (InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream()) {
-            return StreamUtils.copyToString(reportStream, StandardCharsets.UTF_8);
-        }
+    public void saveReportDesign(String designContent) {
+        ReportDesign reportDesign = reportDesignRepository.findByReportName("employee_report")
+                .orElse(new ReportDesign());
+        
+        reportDesign.setReportName("employee_report");
+        reportDesign.setDesignContent(designContent);
+        reportDesignRepository.save(reportDesign);
     }
 
     public byte[] exportEmployeeReport() throws Exception {
@@ -49,22 +63,24 @@ public class EmployeeReportService {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("createdBy", "Jasper Report System");
 
+        // Get design from database
+        String designContent = getReportDesign();
+        JasperReport jasperReport = JasperCompileManager.compileReport(
+                new ByteArrayInputStream(designContent.getBytes(StandardCharsets.UTF_8))
+        );
+
         // Don't close these streams - let JasperReports handle them
         InputStream logoLeftStream = new ClassPathResource("logo.png").getInputStream();
         InputStream logoRightStream = new ClassPathResource("organization_logo.png").getInputStream();
         parameters.put("logoLeft", logoLeftStream);
         parameters.put("logoRight", logoRightStream);
 
-        String jrxmlContent = getReportDesign();
-        InputStream reportStream = new ByteArrayInputStream(jrxmlContent.getBytes(StandardCharsets.UTF_8));
-        JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
         JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, dataSource);
         byte[] pdfBytes = JasperExportManager.exportReportToPdf(jasperPrint);
 
         // Close streams after PDF generation
         logoLeftStream.close();
         logoRightStream.close();
-        reportStream.close();
 
         return pdfBytes;
     }
