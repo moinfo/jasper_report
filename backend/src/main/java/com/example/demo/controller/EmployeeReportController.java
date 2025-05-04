@@ -27,4 +27,16 @@ public class EmployeeReportController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    @GetMapping("/employees/preview")
+    public ResponseEntity<String> previewReportDesign() {
+        try {
+            String jrxmlContent = employeeReportService.getReportDesign();
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_XML)
+                    .body(jrxmlContent);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 } 

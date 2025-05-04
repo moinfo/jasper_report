@@ -38,6 +38,18 @@ function EmployeeList() {
       .catch((err) => alert("Failed to export: " + err));
   };
 
+  const handlePreview = () => {
+    fetch("/api/reports/employees/preview", {
+      method: "GET",
+    })
+      .then((response) => response.blob())
+      .then((blob) => {
+        const fileURL = window.URL.createObjectURL(blob);
+        window.open(fileURL, '_blank');
+      })
+      .catch((err) => alert("Failed to preview report: " + err));
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -45,6 +57,9 @@ function EmployeeList() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Employee List</h2>
         <div>
+          <button className="btn btn-primary me-2" onClick={handlePreview}>
+            Preview Report
+          </button>
           <button className="btn btn-danger me-2" onClick={() => handleExport("pdf")}>
             Export PDF
           </button>
