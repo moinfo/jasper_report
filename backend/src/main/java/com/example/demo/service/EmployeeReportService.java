@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.entity.Employee;
+import com.example.demo.entity.ReportTemplate;
 import com.example.demo.repository.EmployeeRepository;
 import net.sf.jasperreports.engine.*;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
@@ -9,6 +10,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -20,7 +22,22 @@ public class EmployeeReportService {
     @Autowired
     private EmployeeRepository employeeRepository;
 
+    @Autowired
+    private ReportTemplateService templateService;
+
     public String getReportDesign() throws Exception {
+        return templateService.getActiveTemplate("employee_report")
+                .map(ReportTemplate::getJrxmlContent)
+                .orElseGet(() -> {
+                    try {
+                        return loadDefaultTemplate();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to load default template", e);
+                    }
+                });
+    }
+
+    private String loadDefaultTemplate() throws Exception {
         try (InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream()) {
             return StreamUtils.copyToString(reportStream, StandardCharsets.UTF_8);
         }
@@ -38,7 +55,8 @@ public class EmployeeReportService {
         parameters.put("logoLeft", logoLeftStream);
         parameters.put("logoRight", logoRightStream);
 
-        InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream();
+        String jrxmlContent = getReportDesign();
+        InputStream reportStream = new ByteArrayInputStream(jrxmlContent.getBytes(StandardCharsets.UTF_8));
         JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
         JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, dataSource);
         byte[] pdfBytes = JasperExportManager.exportReportToPdf(jasperPrint);
