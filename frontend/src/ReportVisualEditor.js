@@ -127,30 +127,33 @@ const BandDropArea = ({ bandName, bandIdx, children, onDropElement }) => {
 // Helper to serialize bands/elements to JRXML
 function bandsToJrxml(bands) {
   function elementToXml(el) {
-    // Convert color from hex to JRXML format (0xRRGGBB)
     const hexToJRXMLColor = (hex) => hex ? hex.replace('#', '0x') : null;
-    
-    // Compose style attributes for reportElement
     const reportElementAttrs = [
       `x="${el.x}"`,
       `y="${el.y}"`,
       `width="${el.width}"`,
       `height="${el.height}"`,
       el.backgroundColor ? `backcolor="${hexToJRXMLColor(el.backgroundColor)}"` : '',
-      el.backgroundColor ? 'mode="Opaque"' : 'mode="Transparent"',
+      `mode="${el.backgroundColor ? 'Opaque' : 'Transparent'}"`,
       el.forecolor ? `forecolor="${hexToJRXMLColor(el.forecolor)}"` : '',
     ].filter(Boolean).join(' ');
 
-    // Compose style attributes for textElement
     const textElementAttrs = [
       el.textAlignment ? `textAlignment="${el.textAlignment}"` : '',
       el.verticalAlignment ? `verticalAlignment="${el.verticalAlignment}"` : '',
     ].filter(Boolean).join(' ');
 
+    // Always set a default fontName and fontSize for JasperReports compatibility
+    const fontAttrs = [
+      `fontName="${el.fontFamily || 'Arial'}"`,
+      `size="${parseInt(el.fontSize) || 12}"`,
+      el.isBold ? `isBold="true"` : '',
+      el.isItalic ? `isItalic="true"` : '',
+      el.isUnderline ? `isUnderline="true"` : '',
+    ].filter(Boolean).join(' ');
+
     const reportElement = `<reportElement ${reportElementAttrs}/>`;
-    const textElement = textElementAttrs ? `<textElement ${textElementAttrs}>
-      <font size="${el.fontSize || 10}" isBold="${el.isBold || false}"/>
-    </textElement>` : '';
+    const textElement = `<textElement ${textElementAttrs}><font ${fontAttrs}/></textElement>`;
 
     if (el.type === 'staticText') {
       return `<staticText>
