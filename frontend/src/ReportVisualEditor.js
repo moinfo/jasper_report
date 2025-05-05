@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Button, Modal, Form, Row, Col, Card } from 'react-bootstrap';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -260,6 +260,8 @@ function ReportVisualEditor() {
   });
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [resizing, setResizing] = useState(null); // { bandName, bandIdx, elIdx, startX, startWidth }
+  const containerRef = useRef();
 
   const handleShow = () => {
     setLoadingDesign(true);
@@ -534,6 +536,38 @@ function ReportVisualEditor() {
     }
   };
 
+  // Column resizing logic
+  const handleColumnResizeStart = (e, bandName, bandIdx, elIdx) => {
+    e.preventDefault();
+    setResizing({
+      bandName,
+      bandIdx,
+      elIdx,
+      startX: e.clientX,
+      startWidth: bands[bandName][bandIdx].elements[elIdx].width,
+    });
+  };
+
+  React.useEffect(() => {
+    if (!resizing) return;
+    const handleMouseMove = (e) => {
+      const delta = e.clientX - resizing.startX;
+      setBands(prev => {
+        const newBands = { ...prev };
+        const newWidth = Math.max(40, resizing.startWidth + delta);
+        newBands[resizing.bandName][resizing.bandIdx].elements[resizing.elIdx].width = newWidth;
+        return newBands;
+      });
+    };
+    const handleMouseUp = () => setResizing(null);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
+
   return (
     <>
       <Button variant="primary" onClick={handleShow}>
@@ -586,34 +620,123 @@ function ReportVisualEditor() {
                         <div
                           id={`band-${bandName}-${bandIdx}`}
                           style={{ position: 'relative', minHeight: 60 }}
+                          ref={containerRef}
                         >
                           <div style={{ fontWeight: 'bold', fontSize: 13, color: '#888', marginBottom: 2 }}>{BAND_LABELS[bandName]}</div>
-                          {band.elements.map((el, elIdx) => (
-                            <Rnd
-                              key={el.id}
-                              size={{ width: el.width, height: el.height }}
-                              position={{ x: el.x, y: el.y }}
-                              onDragStop={(e, d) => handleElementDragStop(bandName, bandIdx, elIdx, d)}
-                              bounds="parent"
-                              style={{
-                                border: '1px solid #007bff',
-                                background: el.type === 'staticText' ? '#f8f9fa' : 'transparent',
-                                color: el.textColor || styleSettings.textColor,
-                                fontSize: el.fontSize || styleSettings.fontSize,
-                                fontFamily: styleSettings.fontFamily,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
-                            >
-                              {el.type === 'staticText' && <span>{el.text}</span>}
-                              {el.type === 'textField' && <span>{el.text}</span>}
-                              {el.type === 'line' && <div style={{ width: '100%', height: 2, background: '#000' }} />}
-                              {el.type === 'image' && <div style={{ width: '100%', height: '100%', background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>[Image]</div>}
-                            </Rnd>
-                          ))}
+                          {/* Editable/resizable table for columnHeader and detail bands */}
+                          {(bandName === 'columnHeader' || bandName === 'detail') ? (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'row',
+                              background: bandName === 'columnHeader' ? '#343a40' : '#f8f9fa',
+                              border: '1px solid #000',
+                              height: band.height,
+                            }}>
+                              {band.elements.map((el, elIdx) => (
+                                <div
+                                  key={el.id}
+                                  style={{
+                                    width: el.width,
+                                    minWidth: 40,
+                                    height: el.height,
+                                    borderRight: '1px solid #000',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: el.forecolor || (bandName === 'columnHeader' ? '#fff' : '#000'),
+                                    fontWeight: el.isBold ? 'bold' : 'normal',
+                                    fontSize: el.fontSize,
+                                    background: el.backgroundColor,
+                                    textAlign: el.textAlignment?.toLowerCase() || 'center',
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
+                                >
+                                  {(el.type === 'staticText' || el.type === 'textField') ? (
+                                    selectedElement && selectedElement.bandName === bandName && selectedElement.bandIdx === bandIdx && selectedElement.elIdx === elIdx ? (
+                                      <input
+                                        value={el.text}
+                                        onChange={e => {
+                                          const value = e.target.value;
+                                          setBands(prev => {
+                                            const newBands = { ...prev };
+                                            newBands[bandName][bandIdx].elements[elIdx].text = value;
+                                            return newBands;
+                                          });
+                                        }}
+                                        onBlur={() => setSelectedElement(null)}
+                                        autoFocus
+                                        style={{ width: '90%', fontSize: el.fontSize, fontWeight: el.isBold ? 'bold' : 'normal', textAlign: el.textAlignment?.toLowerCase() || 'center', background: 'transparent', color: el.forecolor || (bandName === 'columnHeader' ? '#fff' : '#000'), border: 'none' }}
+                                      />
+                                    ) : (
+                                      <span>{el.text}</span>
+                                    )
+                                  ) : null}
+                                  {el.type === 'image' ? (
+                                    <img
+                                      src={el.imageExpr && el.imageExpr.includes('logoRight') ? '/logo-right.png' :
+                                           el.imageExpr && el.imageExpr.includes('logoLeft') ? '/logo-left.png' :
+                                           'https://via.placeholder.com/60'}
+                                      alt="Logo"
+                                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                    />
+                                  ) : null}
+                                  {/* Resizer handle */}
+                                  {elIdx < band.elements.length - 1 && (
+                                    <div
+                                      style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: 0,
+                                        width: 6,
+                                        height: '100%',
+                                        cursor: 'col-resize',
+                                        zIndex: 2,
+                                      }}
+                                      onMouseDown={e => handleColumnResizeStart(e, bandName, bandIdx, elIdx)}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            // Freeform layout for other bands
+                            band.elements.map((el, elIdx) => (
+                              <Rnd
+                                key={el.id}
+                                size={{ width: el.width, height: el.height }}
+                                position={{ x: el.x, y: el.y }}
+                                onDragStop={(e, d) => handleElementDragStop(bandName, bandIdx, elIdx, d)}
+                                bounds="parent"
+                                style={{
+                                  border: '1px solid #007bff',
+                                  background: el.type === 'staticText' ? '#f8f9fa' : 'transparent',
+                                  color: el.textColor || styleSettings.textColor,
+                                  fontSize: el.fontSize || styleSettings.fontSize,
+                                  fontFamily: styleSettings.fontFamily,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
+                              >
+                                {el.type === 'staticText' && <span>{el.text}</span>}
+                                {el.type === 'textField' && <span>{el.text}</span>}
+                                {el.type === 'line' && <div style={{ width: '100%', height: 2, background: '#000' }} />}
+                                {el.type === 'image' && (
+                                  <img
+                                    src={el.imageExpr && el.imageExpr.includes('logoRight') ? '/logo-right.png' :
+                                         el.imageExpr && el.imageExpr.includes('logoLeft') ? '/logo-left.png' :
+                                         'https://via.placeholder.com/60'}
+                                    alt="Logo"
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                  />
+                                )}
+                              </Rnd>
+                            ))
+                          )}
                         </div>
                       </BandDropArea>
                     ))
