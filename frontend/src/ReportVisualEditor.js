@@ -3,9 +3,6 @@ import { Button, Modal, Form, Row, Col, Card } from 'react-bootstrap';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { SketchPicker } from 'react-color';
-import AceEditor from 'react-ace';
-import 'ace-builds/src-noconflict/mode-xml';
-import 'ace-builds/src-noconflict/theme-github';
 import { Rnd } from 'react-rnd';
 import { XMLParser } from 'fast-xml-parser';
 
@@ -16,6 +13,8 @@ const ELEMENT_TYPES = [
   { type: 'line', label: 'Line' },
   { type: 'image', label: 'Image' },
 ];
+
+const AUTO_ARRANGE_BANDS = ['title', 'columnHeader', 'detail'];
 
 // Helper to parse JRXML and extract elements from all bands
 const parseJrxml = (jrxml) => {
@@ -88,6 +87,12 @@ const parseJrxml = (jrxml) => {
             });
           });
         }
+        // Auto-arrange fields in title, columnHeader, and detail bands horizontally
+        if (AUTO_ARRANGE_BANDS.includes(bandName) && elements.length > 0) {
+          const colWidth = 120;
+          const y = 10;
+          elements = elements.map((el, idx) => ({ ...el, x: 10 + idx * colWidth, y }));
+        }
         return { elements };
       });
     }
@@ -153,6 +158,41 @@ const BandDropArea = ({ bandName, bandIdx, children, onDropElement }) => {
   );
 };
 
+// Helper to serialize bands/elements to JRXML
+function bandsToJrxml(bands) {
+  // This is a minimal JRXML structure for demonstration. You can expand it as needed.
+  function elementToXml(el) {
+    const base = `<reportElement x=\"${el.x}\" y=\"${el.y}\" width=\"${el.width}\" height=\"${el.height}\" />`;
+    if (el.type === 'staticText') {
+      return `<staticText>${base}<text><![CDATA[${el.text || ''}]]></text></staticText>`;
+    }
+    if (el.type === 'textField') {
+      return `<textField>${base}<textFieldExpression><![CDATA[${el.text || ''}]]></textFieldExpression></textField>`;
+    }
+    if (el.type === 'line') {
+      return `<line>${base}</line>`;
+    }
+    if (el.type === 'image') {
+      return `<image>${base}<imageExpression><![CDATA[${el.imageExpr || ''}]]></imageExpression></image>`;
+    }
+    return '';
+  }
+  function bandXml(band) {
+    return `<band height=\"100\">${band.elements.map(elementToXml).join('')}</band>`;
+  }
+  // Compose the JRXML
+  let jrxml = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<jasperReport name=\"VisualDesign\" pageWidth=\"595\" pageHeight=\"842\" columnWidth=\"555\" leftMargin=\"20\" rightMargin=\"20\" topMargin=\"20\" bottomMargin=\"20\">`;
+  for (const bandName of BAND_NAMES) {
+    if (bands[bandName]) {
+      bands[bandName].forEach(band => {
+        jrxml += `\n<${bandName}>${bandXml(band)}</${bandName}>`;
+      });
+    }
+  }
+  jrxml += '\n</jasperReport>';
+  return jrxml;
+}
+
 function ReportVisualEditor() {
   const [show, setShow] = useState(false);
   const [designContent, setDesignContent] = useState("");
@@ -193,12 +233,14 @@ function ReportVisualEditor() {
 
   const handleSave = () => {
     setSaving(true);
+    // Serialize bands/elements to JRXML
+    const jrxml = bandsToJrxml(bands);
     fetch("/api/reports/employees/design", {
       method: "POST",
       headers: {
         "Content-Type": "text/plain",
       },
-      body: designContent,
+      body: jrxml,
     })
       .then((response) => {
         if (response.ok) {
@@ -226,25 +268,45 @@ function ReportVisualEditor() {
     });
   };
 
-  // Add new element to band on drop
+  // Update handleDropElement to auto-arrange new fields in detail band
   const handleDropElement = useCallback((type, bandName, bandIdx, offset) => {
-    // Calculate drop position relative to the band area
     const bandDiv = document.getElementById(`band-${bandName}-${bandIdx}`);
     if (!bandDiv) return;
     const rect = bandDiv.getBoundingClientRect();
-    const x = Math.round(offset.x - rect.left);
-    const y = Math.round(offset.y - rect.top);
+    let x = Math.round(offset.x - rect.left);
+    let y = Math.round(offset.y - rect.top);
     setBands(prev => {
       const newBands = { ...prev };
       newBands[bandName] = newBands[bandName].map((band, bIdx) => {
         if (bIdx !== bandIdx) return band;
+        const defaultWidth = type === 'line' ? 100 : 120;
+        const defaultHeight = type === 'line' ? 2 : 30;
+        // For title, columnHeader, and detail bands, auto-arrange horizontally
+        if (AUTO_ARRANGE_BANDS.includes(bandName)) {
+          x = 10 + band.elements.length * defaultWidth;
+          y = 10;
+        } else {
+          // Avoid overlap for other bands
+          let newY = y;
+          let tries = 0;
+          while (band.elements.some(el => {
+            return (
+              (x < el.x + el.width && x + defaultWidth > el.x) &&
+              (newY < el.y + el.height && newY + defaultHeight > el.y)
+            );
+          }) && tries < 100) {
+            newY += defaultHeight + 5;
+            tries++;
+          }
+          y = newY;
+        }
         const newElement = {
           type,
           id: `${bandName}-${type}-new-${Date.now()}`,
           x,
           y,
-          width: type === 'line' ? 100 : 120,
-          height: type === 'line' ? 2 : 30,
+          width: defaultWidth,
+          height: defaultHeight,
           text: type === 'staticText' ? 'Static Text' : (type === 'textField' ? '$F{field}' : ''),
           imageExpr: type === 'image' ? '[Image]' : undefined,
         };
@@ -265,6 +327,89 @@ function ReportVisualEditor() {
     columnFooter: 'Column Footer',
     pageFooter: 'Page Footer',
     summary: 'Summary',
+  };
+
+  // Property editor for selected element
+  const renderPropertyEditor = () => {
+    if (!selectedElement) return null;
+    const { bandName, bandIdx, elIdx } = selectedElement;
+    const el = bands[bandName]?.[bandIdx]?.elements[elIdx];
+    if (!el) return null;
+    return (
+      <Card className="mt-3">
+        <Card.Header>Edit Element</Card.Header>
+        <Card.Body>
+          {el.type === 'staticText' || el.type === 'textField' ? (
+            <Form.Group className="mb-3">
+              <Form.Label>Text</Form.Label>
+              <Form.Control
+                type="text"
+                value={el.text}
+                onChange={e => {
+                  const value = e.target.value;
+                  setBands(prev => {
+                    const newBands = { ...prev };
+                    newBands[bandName] = newBands[bandName].map((band, bIdx) => {
+                      if (bIdx !== bandIdx) return band;
+                      return {
+                        ...band,
+                        elements: band.elements.map((elem, idx) => idx === elIdx ? { ...elem, text: value } : elem)
+                      };
+                    });
+                    return newBands;
+                  });
+                }}
+              />
+            </Form.Group>
+          ) : null}
+          <Form.Group className="mb-3">
+            <Form.Label>Font Size</Form.Label>
+            <Form.Select
+              value={el.fontSize || '12px'}
+              onChange={e => {
+                const value = e.target.value;
+                setBands(prev => {
+                  const newBands = { ...prev };
+                  newBands[bandName] = newBands[bandName].map((band, bIdx) => {
+                    if (bIdx !== bandIdx) return band;
+                    return {
+                      ...band,
+                      elements: band.elements.map((elem, idx) => idx === elIdx ? { ...elem, fontSize: value } : elem)
+                    };
+                  });
+                  return newBands;
+                });
+              }}
+            >
+              <option value="10px">10px</option>
+              <option value="12px">12px</option>
+              <option value="14px">14px</option>
+              <option value="16px">16px</option>
+              <option value="18px">18px</option>
+            </Form.Select>
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label>Text Color</Form.Label>
+            <SketchPicker
+              color={el.textColor || '#000000'}
+              onChangeComplete={color => {
+                setBands(prev => {
+                  const newBands = { ...prev };
+                  newBands[bandName] = newBands[bandName].map((band, bIdx) => {
+                    if (bIdx !== bandIdx) return band;
+                    return {
+                      ...band,
+                      elements: band.elements.map((elem, idx) => idx === elIdx ? { ...elem, textColor: color.hex } : elem)
+                    };
+                  });
+                  return newBands;
+                });
+              }}
+            />
+          </Form.Group>
+        </Card.Body>
+      </Card>
+    );
   };
 
   return (
@@ -299,40 +444,9 @@ function ReportVisualEditor() {
                         onChangeComplete={(color) => setStyleSettings(s => ({ ...s, backgroundColor: color.hex }))}
                       />
                     </Form.Group>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Text Color</Form.Label>
-                      <SketchPicker
-                        color={styleSettings.textColor}
-                        onChangeComplete={(color) => setStyleSettings(s => ({ ...s, textColor: color.hex }))}
-                      />
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Font Size</Form.Label>
-                      <Form.Select
-                        value={styleSettings.fontSize}
-                        onChange={(e) => setStyleSettings(s => ({ ...s, fontSize: e.target.value }))}
-                      >
-                        <option value="10px">10px</option>
-                        <option value="12px">12px</option>
-                        <option value="14px">14px</option>
-                        <option value="16px">16px</option>
-                        <option value="18px">18px</option>
-                      </Form.Select>
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Font Family</Form.Label>
-                      <Form.Select
-                        value={styleSettings.fontFamily}
-                        onChange={(e) => setStyleSettings(s => ({ ...s, fontFamily: e.target.value }))}
-                      >
-                        <option value="Arial">Arial</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Helvetica">Helvetica</option>
-                        <option value="Verdana">Verdana</option>
-                      </Form.Select>
-                    </Form.Group>
                   </Card.Body>
                 </Card>
+                {renderPropertyEditor()}
               </Col>
               <Col md={9}>
                 <div style={{
@@ -367,13 +481,15 @@ function ReportVisualEditor() {
                               style={{
                                 border: '1px solid #007bff',
                                 background: el.type === 'staticText' ? '#f8f9fa' : 'transparent',
-                                color: styleSettings.textColor,
-                                fontSize: styleSettings.fontSize,
+                                color: el.textColor || styleSettings.textColor,
+                                fontSize: el.fontSize || styleSettings.fontSize,
                                 fontFamily: styleSettings.fontFamily,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
+                                cursor: 'pointer',
                               }}
+                              onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
                             >
                               {el.type === 'staticText' && <span>{el.text}</span>}
                               {el.type === 'textField' && <span>{el.text}</span>}
