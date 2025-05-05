@@ -7,13 +7,6 @@ import { Rnd } from 'react-rnd';
 import { XMLParser } from 'fast-xml-parser';
 
 const BAND_NAMES = ['title', 'pageHeader', 'columnHeader', 'detail', 'columnFooter', 'pageFooter', 'summary'];
-const ELEMENT_TYPES = [
-  { type: 'staticText', label: 'Static Text' },
-  { type: 'textField', label: 'Text Field' },
-  { type: 'line', label: 'Line' },
-  { type: 'image', label: 'Image' },
-];
-
 const AUTO_ARRANGE_BANDS = ['title', 'columnHeader', 'detail'];
 
 // Helper to parse JRXML and extract elements from all bands
@@ -98,33 +91,6 @@ const parseJrxml = (jrxml) => {
     }
   });
   return bands;
-};
-
-// Draggable sidebar element
-const SidebarElement = ({ type, label }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: 'NEW_ELEMENT',
-    item: { type },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }), [type]);
-  return (
-    <div
-      ref={drag}
-      style={{
-        opacity: isDragging ? 0.5 : 1,
-        cursor: 'move',
-        padding: '10px',
-        margin: '5px 0',
-        border: '1px dashed #ccc',
-        backgroundColor: '#f8f9fa',
-        textAlign: 'center',
-      }}
-    >
-      {label}
-    </div>
-  );
 };
 
 // Drop target for each band
@@ -420,20 +386,12 @@ function ReportVisualEditor() {
 
       <Modal show={show} onHide={handleClose} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>Visual Report Editor (WYSIWYG - All Bands, Drag to Add)</Modal.Title>
+          <Modal.Title>Visual Report Editor (WYSIWYG - All Bands, Edit Only)</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <DndProvider backend={HTML5Backend}>
             <Row>
               <Col md={3}>
-                <Card>
-                  <Card.Header>Elements</Card.Header>
-                  <Card.Body>
-                    {ELEMENT_TYPES.map((el) => (
-                      <SidebarElement key={el.type} type={el.type} label={el.label} />
-                    ))}
-                  </Card.Body>
-                </Card>
                 <Card className="mt-3">
                   <Card.Header>Style Settings</Card.Header>
                   <Card.Body>
