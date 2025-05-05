@@ -126,44 +126,119 @@ const BandDropArea = ({ bandName, bandIdx, children, onDropElement }) => {
 
 // Helper to serialize bands/elements to JRXML
 function bandsToJrxml(bands) {
-  // This is a minimal JRXML structure for demonstration. You can expand it as needed.
   function elementToXml(el) {
-    const base = `<reportElement x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
+    // Convert color from hex to JRXML format (0xRRGGBB)
+    const hexToJRXMLColor = (hex) => hex ? hex.replace('#', '0x') : null;
+    
+    // Compose style attributes for reportElement
+    const reportElementAttrs = [
+      `x="${el.x}"`,
+      `y="${el.y}"`,
+      `width="${el.width}"`,
+      `height="${el.height}"`,
+      el.backgroundColor ? `backcolor="${hexToJRXMLColor(el.backgroundColor)}"` : '',
+      el.backgroundColor ? 'mode="Opaque"' : 'mode="Transparent"',
+      el.forecolor ? `forecolor="${hexToJRXMLColor(el.forecolor)}"` : '',
+    ].filter(Boolean).join(' ');
+
+    // Compose style attributes for textElement
+    const textElementAttrs = [
+      el.textAlignment ? `textAlignment="${el.textAlignment}"` : '',
+      el.verticalAlignment ? `verticalAlignment="${el.verticalAlignment}"` : '',
+    ].filter(Boolean).join(' ');
+
+    const reportElement = `<reportElement ${reportElementAttrs}/>`;
+    const textElement = textElementAttrs ? `<textElement ${textElementAttrs}>
+      <font size="${el.fontSize || 10}" isBold="${el.isBold || false}"/>
+    </textElement>` : '';
+
     if (el.type === 'staticText') {
-      return `<staticText>${base}<text><![CDATA[${el.text || ''}]]></text></staticText>`;
+      return `<staticText>
+        ${reportElement}
+        ${textElement}
+        <text><![CDATA[${el.text || ''}]]></text>
+      </staticText>`;
     }
     if (el.type === 'textField') {
-      return `<textField>${base}<textFieldExpression><![CDATA[${el.text || ''}]]></textFieldExpression></textField>`;
+      return `<textField>
+        ${reportElement}
+        ${textElement}
+        <textFieldExpression><![CDATA[${el.text || ''}]]></textFieldExpression>
+      </textField>`;
     }
     if (el.type === 'line') {
-      return `<line>${base}</line>`;
+      return `<line>
+        ${reportElement}
+        <graphicElement>
+          <pen lineWidth="${el.lineWidth || 0.5}" lineColor="${hexToJRXMLColor(el.lineColor || '#000000')}"/>
+        </graphicElement>
+      </line>`;
     }
     if (el.type === 'image') {
-      return `<image>${base}<imageExpression><![CDATA[${el.imageExpr || ''}]]></imageExpression></image>`;
+      return `<image>
+        ${reportElement}
+        <imageExpression><![CDATA[${el.imageExpr || ''}]]></imageExpression>
+      </image>`;
+    }
+    if (el.type === 'rectangle') {
+      return `<rectangle>
+        ${reportElement}
+      </rectangle>`;
     }
     return '';
   }
+
   function bandXml(band) {
-    return `<band height="100">${band.elements.map(elementToXml).join('')}</band>`;
+    return `<band height="${band.height || 60}">${band.elements.map(elementToXml).join('')}</band>`;
   }
-  // Compose the JRXML
+
+  // Compose the JRXML with proper formatting and all required parameters/fields
   let jrxml = `<?xml version="1.0" encoding="UTF-8"?>
-<jasperReport name="VisualDesign" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
-  <parameter name="logoRight" class="java.lang.String"/>
-  <parameter name="logoLeft" class="java.lang.String"/>
-  <field name="name" class="java.lang.String"/>
-  <field name="address" class="java.lang.String"/>
-  <field name="phone" class="java.lang.String"/>
-  <field name="gender" class="java.lang.String"/>
-`;
+<!DOCTYPE jasperReport PUBLIC "-//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="employee_report"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20"
+              uuid="e1b1e1b1-1111-1111-1111-111111111111">
+
+    <!-- Style must come first, with proper box structure -->
+    <style name="TableCell" mode="Transparent" forecolor="#000000" backcolor="#FFFFFF" fill="Solid" fontName="SansSerif" fontSize="10">
+        <box>
+            <pen lineWidth="0.5" lineColor="#000000"/>
+            <topPen lineWidth="0.5" lineColor="#000000"/>
+            <leftPen lineWidth="0.5" lineColor="#000000"/>
+            <bottomPen lineWidth="0.5" lineColor="#000000"/>
+            <rightPen lineWidth="0.5" lineColor="#000000"/>
+        </box>
+    </style>
+
+    <!-- Parameters come after style -->
+    <parameter name="logoLeft" class="java.io.InputStream"/>
+    <parameter name="logoRight" class="java.io.InputStream"/>
+
+    <!-- Fields come after parameters -->
+    <field name="name" class="java.lang.String"/>
+    <field name="address" class="java.lang.String"/>
+    <field name="phone" class="java.lang.String"/>
+    <field name="gender" class="java.lang.String"/>`;
+
+  // Add all bands
   for (const bandName of BAND_NAMES) {
     if (bands[bandName]) {
       bands[bandName].forEach(band => {
         jrxml += `
-<${bandName}>${bandXml(band)}</${bandName}>`;
+    <${bandName}>${bandXml(band)}</${bandName}>`;
       });
     }
   }
+
   jrxml += '\n</jasperReport>';
   return jrxml;
 }
@@ -256,27 +331,52 @@ function ReportVisualEditor() {
       const newBands = { ...prev };
       newBands[bandName] = newBands[bandName].map((band, bIdx) => {
         if (bIdx !== bandIdx) return band;
-        const defaultWidth = type === 'line' ? 100 : 120;
-        const defaultHeight = type === 'line' ? 2 : 30;
-        // For title, columnHeader, and detail bands, auto-arrange horizontally
-        if (AUTO_ARRANGE_BANDS.includes(bandName)) {
-          x = 10 + band.elements.length * defaultWidth;
-          y = 10;
+
+        // Set default dimensions based on band type and element type
+        let defaultWidth, defaultHeight;
+        if (bandName === 'title') {
+          defaultWidth = type === 'image' ? 60 : 435;
+          defaultHeight = type === 'image' ? 60 : 60;
+        } else if (bandName === 'columnHeader') {
+          defaultWidth = type === 'staticText' ? 140 : 555;
+          defaultHeight = 25;
+        } else if (bandName === 'detail') {
+          defaultWidth = type === 'textField' ? 140 : 555;
+          defaultHeight = 20;
         } else {
-          // Avoid overlap for other bands
-          let newY = y;
-          let tries = 0;
-          while (band.elements.some(el => {
-            return (
-              (x < el.x + el.width && x + defaultWidth > el.x) &&
-              (newY < el.y + el.height && newY + defaultHeight > el.y)
-            );
-          }) && tries < 100) {
-            newY += defaultHeight + 5;
-            tries++;
-          }
-          y = newY;
+          defaultWidth = type === 'line' ? 100 : 120;
+          defaultHeight = type === 'line' ? 2 : 30;
         }
+
+        // Set default positions based on band type
+        if (bandName === 'title') {
+          if (type === 'image') {
+            x = band.elements.filter(e => e.type === 'image').length === 0 ? 0 : 495;
+          } else {
+            x = 60;
+          }
+          y = 0;
+        } else if (bandName === 'columnHeader') {
+          if (type === 'rectangle') {
+            x = 0;
+            y = 0;
+          } else {
+            const widths = [0, 140, 320, 440];
+            x = widths[band.elements.filter(e => e.type === 'staticText').length];
+            y = 0;
+          }
+        } else if (bandName === 'detail') {
+          if (type === 'rectangle') {
+            x = 0;
+            y = 0;
+          } else {
+            const widths = [0, 140, 320, 440];
+            x = widths[band.elements.filter(e => e.type === 'textField').length];
+            y = 0;
+          }
+        }
+
+        // Create element with appropriate properties
         const newElement = {
           type,
           id: `${bandName}-${type}-new-${Date.now()}`,
@@ -284,9 +384,20 @@ function ReportVisualEditor() {
           y,
           width: defaultWidth,
           height: defaultHeight,
-          text: type === 'staticText' ? 'Static Text' : (type === 'textField' ? '$F{field}' : ''),
-          imageExpr: type === 'image' ? '[Image]' : undefined,
+          text: type === 'staticText' ? 
+            (bandName === 'title' ? 'Employee Report' : 
+             bandName === 'columnHeader' ? ['Name', 'Address', 'Phone', 'Gender'][band.elements.filter(e => e.type === 'staticText').length] : '') :
+            (type === 'textField' ? ['$F{name}', '$F{address}', '$F{phone}', '$F{gender}'][band.elements.filter(e => e.type === 'textField').length] : ''),
+          forecolor: bandName === 'columnHeader' ? '#FFFFFF' : '#000000',
+          backgroundColor: bandName === 'columnHeader' ? '#343a40' : 
+                          bandName === 'detail' ? '#f8f9fa' : undefined,
+          fontSize: bandName === 'title' ? 28 : 10,
+          isBold: bandName === 'title' || bandName === 'columnHeader',
+          textAlignment: 'Center',
+          verticalAlignment: 'Middle',
+          imageExpr: type === 'image' ? (x === 0 ? '$P{logoRight}' : '$P{logoLeft}') : undefined,
         };
+
         return {
           ...band,
           elements: [...band.elements, newElement],
