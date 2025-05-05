@@ -634,7 +634,12 @@ function ReportVisualEditor() {
                               width: 555,
                               margin: '0 auto',
                             }}>
-                              <img src="/logo-right.png" alt="Logo Right" style={{ width: 60, height: 60 }} />
+                              <img
+                                src={'/organization_logo.png'}
+                                onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo+Right'; }}
+                                alt="Logo Right"
+                                style={{ width: 60, height: 60 }}
+                              />
                               <div style={{
                                 flex: 1,
                                 textAlign: 'center',
@@ -644,7 +649,12 @@ function ReportVisualEditor() {
                               }}>
                                 Employee Report
                               </div>
-                              <img src="/logo-left.png" alt="Logo Left" style={{ width: 60, height: 60 }} />
+                              <img
+                                src={'/logo.png'}
+                                onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo+Left'; }}
+                                alt="Logo Left"
+                                style={{ width: 60, height: 60 }}
+                              />
                             </div>
                           ) : (bandName === 'columnHeader' || bandName === 'detail') ? (
                             <div style={{
@@ -743,11 +753,14 @@ function ReportVisualEditor() {
                                 {el.type === 'line' && <div style={{ width: '100%', height: 2, background: '#000' }} />}
                                 {el.type === 'image' && (
                                   <img
-                                    src={el.imageExpr && el.imageExpr.includes('logoRight') ? '/logo-right.png' :
-                                         el.imageExpr && el.imageExpr.includes('logoLeft') ? '/logo-left.png' :
-                                         'https://via.placeholder.com/60'}
+                                    src={el.imageExpr && el.imageExpr.includes('logoRight')
+                                      ? '/organization_logo.png'
+                                      : el.imageExpr && el.imageExpr.includes('logoLeft')
+                                      ? '/logo.png'
+                                      : 'https://via.placeholder.com/60?text=Logo'}
                                     alt="Logo"
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#eee' }}
+                                    onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo'; }}
                                   />
                                 )}
                               </Rnd>
