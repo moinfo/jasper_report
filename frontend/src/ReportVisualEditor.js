@@ -212,7 +212,7 @@ function ReportVisualEditor() {
     setSaving(true);
     // Serialize bands/elements to JRXML
     const jrxml = bandsToJrxml(bands);
-    fetch("/api/employees/preview-live", {
+    fetch("/api/reports/employees/design", {
       method: "POST",
       headers: {
         "Content-Type": "text/plain",
@@ -221,13 +221,13 @@ function ReportVisualEditor() {
     })
       .then((response) => {
         if (response.ok) {
-          alert("Design saved successfully!");
+          alert("Design updated successfully!");
           handleClose();
         } else {
-          throw new Error("Failed to save design");
+          throw new Error("Failed to update design");
         }
       })
-      .catch((err) => alert("Failed to save design: " + err))
+      .catch((err) => alert("Failed to update design: " + err))
       .finally(() => setSaving(false));
   };
 

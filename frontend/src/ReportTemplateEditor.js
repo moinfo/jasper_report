@@ -37,13 +37,13 @@ function ReportTemplateEditor() {
     })
       .then((response) => {
         if (response.ok) {
-          alert("Design saved successfully!");
+          alert("Design updated successfully!");
           handleClose();
         } else {
-          throw new Error("Failed to save design");
+          throw new Error("Failed to update design");
         }
       })
-      .catch((err) => alert("Failed to save design: " + err))
+      .catch((err) => alert("Failed to update design: " + err))
       .finally(() => setSaving(false));
   };
 
