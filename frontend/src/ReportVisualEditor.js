@@ -262,6 +262,7 @@ function ReportVisualEditor() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [resizing, setResizing] = useState(null); // { bandName, bandIdx, elIdx, startX, startWidth }
   const containerRef = useRef();
+  const sidebarRef = useRef();
 
   const handleShow = () => {
     setLoadingDesign(true);
@@ -426,7 +427,7 @@ function ReportVisualEditor() {
     const el = bands[bandName]?.[bandIdx]?.elements[elIdx];
     if (!el) return null;
     return (
-      <Card className="mt-3">
+      <Card className="mt-3" onClick={e => e.stopPropagation()}>
         <Card.Header>Edit Element</Card.Header>
         <Card.Body>
           {(el.type === 'staticText' || el.type === 'textField') && bandName !== 'detail' ? (
@@ -568,6 +569,14 @@ function ReportVisualEditor() {
     };
   }, [resizing]);
 
+  const handleModalBodyClick = (e) => {
+    if (sidebarRef.current && sidebarRef.current.contains(e.target)) {
+      // Click is inside the sidebar, do not clear selection
+      return;
+    }
+    setSelectedElement(null);
+  };
+
   return (
     <>
       <Button variant="primary" onClick={handleShow}>
@@ -578,37 +587,45 @@ function ReportVisualEditor() {
         <Modal.Header closeButton>
           <Modal.Title>Visual Report Editor (WYSIWYG - All Bands, Edit Only)</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body
+          style={{ position: 'relative', padding: 0 }}
+          onClick={handleModalBodyClick}
+        >
           <DndProvider backend={HTML5Backend}>
             <Row>
-              <Col md={3}>
-                {renderPropertyEditor()}
-                <Card className="mt-3">
-                  <Card.Header>Style Settings</Card.Header>
-                  <Card.Body>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Background Color</Form.Label>
-                      <SketchPicker
-                        color={styleSettings.backgroundColor}
-                        onChangeComplete={(color) => setStyleSettings(s => ({ ...s, backgroundColor: color.hex }))}
-                      />
-                    </Form.Group>
-                  </Card.Body>
-                </Card>
-                <Button className="mt-3 w-100" variant="secondary" onClick={handlePreview} disabled={previewLoading}>
-                  {previewLoading ? 'Generating Preview...' : 'Preview'}
-                </Button>
+              <Col md={3} style={{ zIndex: 2, position: 'relative' }}>
+                <div ref={sidebarRef}>
+                  {renderPropertyEditor()}
+                  <Card className="mt-3">
+                    <Card.Header>Style Settings</Card.Header>
+                    <Card.Body>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Background Color</Form.Label>
+                        <SketchPicker
+                          color={styleSettings.backgroundColor}
+                          onChangeComplete={(color) => setStyleSettings(s => ({ ...s, backgroundColor: color.hex }))}
+                        />
+                      </Form.Group>
+                    </Card.Body>
+                  </Card>
+                  <Button className="mt-3 w-100" variant="secondary" onClick={handlePreview} disabled={previewLoading}>
+                    {previewLoading ? 'Generating Preview...' : 'Preview'}
+                  </Button>
+                </div>
               </Col>
               <Col md={9}>
-                <div style={{
-                  position: 'relative',
-                  width: '800px',
-                  minHeight: '600px',
-                  border: '2px dashed #ccc',
-                  background: '#fff',
-                  overflow: 'auto',
-                  padding: 0,
-                }}>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '800px',
+                    minHeight: '600px',
+                    border: '2px dashed #ccc',
+                    background: '#fff',
+                    overflow: 'auto',
+                    padding: 0,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
                   {BAND_NAMES.map(bandName => (
                     bands[bandName] && bands[bandName].map((band, bandIdx) => (
                       <BandDropArea
@@ -621,40 +638,80 @@ function ReportVisualEditor() {
                           id={`band-${bandName}-${bandIdx}`}
                           style={{ position: 'relative', minHeight: 60 }}
                           ref={containerRef}
+                          onClick={e => e.stopPropagation()}
                         >
                           <div style={{ fontWeight: 'bold', fontSize: 13, color: '#888', marginBottom: 2 }}>{BAND_LABELS[bandName]}</div>
                           {/* PDF-matching layout for title band */}
                           {bandName === 'title' ? (
                             <div style={{
-                              display: 'flex',
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              height: 60,
+                              position: 'relative',
                               width: 555,
+                              height: 60,
                               margin: '0 auto',
+                              background: '#fff',
                             }}>
-                              <img
-                                src={'/organization_logo.png'}
-                                onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo+Right'; }}
-                                alt="Logo Right"
-                                style={{ width: 60, height: 60 }}
-                              />
-                              <div style={{
-                                flex: 1,
-                                textAlign: 'center',
-                                fontWeight: 'bold',
-                                fontSize: 40,
-                                fontFamily: 'Arial, sans-serif',
-                              }}>
-                                Employee Report
-                              </div>
-                              <img
-                                src={'/logo.png'}
-                                onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo+Left'; }}
-                                alt="Logo Left"
-                                style={{ width: 60, height: 60 }}
-                              />
+                              {band.elements.map((el, elIdx) => {
+                                if (el.type === 'image') {
+                                  return (
+                                    <Rnd
+                                      key={el.id}
+                                      size={{ width: el.width, height: el.height }}
+                                      position={{ x: el.x, y: el.y }}
+                                      onDragStop={(e, d) => handleElementDragStop(bandName, bandIdx, elIdx, d)}
+                                      onResizeStop={(e, direction, ref, delta, position) => {
+                                        setBands(prev => {
+                                          const newBands = { ...prev };
+                                          newBands[bandName][bandIdx].elements[elIdx].width = ref.offsetWidth;
+                                          newBands[bandName][bandIdx].elements[elIdx].height = ref.offsetHeight;
+                                          newBands[bandName][bandIdx].elements[elIdx].x = position.x;
+                                          newBands[bandName][bandIdx].elements[elIdx].y = position.y;
+                                          return newBands;
+                                        });
+                                      }}
+                                      bounds="parent"
+                                      style={{ zIndex: 2, cursor: 'move' }}
+                                      onClick={e => { e.stopPropagation(); setSelectedElement({ bandName, bandIdx, elIdx }); }}
+                                    >
+                                      <img
+                                        src={el.imageExpr && el.imageExpr.includes('logoRight')
+                                          ? '/organization_logo.png'
+                                          : el.imageExpr && el.imageExpr.includes('logoLeft')
+                                          ? '/logo.png'
+                                          : 'https://via.placeholder.com/60?text=Logo'}
+                                        alt="Logo"
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#eee' }}
+                                        onError={e => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/60?text=Logo'; }}
+                                      />
+                                    </Rnd>
+                                  );
+                                }
+                                if (el.type === 'staticText') {
+                                  return (
+                                    <Rnd
+                                      key={el.id}
+                                      size={{ width: el.width, height: el.height }}
+                                      position={{ x: el.x, y: el.y }}
+                                      onDragStop={(e, d) => handleElementDragStop(bandName, bandIdx, elIdx, d)}
+                                      onResizeStop={(e, direction, ref, delta, position) => {
+                                        setBands(prev => {
+                                          const newBands = { ...prev };
+                                          newBands[bandName][bandIdx].elements[elIdx].width = ref.offsetWidth;
+                                          newBands[bandName][bandIdx].elements[elIdx].height = ref.offsetHeight;
+                                          newBands[bandName][bandIdx].elements[elIdx].x = position.x;
+                                          newBands[bandName][bandIdx].elements[elIdx].y = position.y;
+                                          return newBands;
+                                        });
+                                      }}
+                                      bounds="parent"
+                                      style={{ zIndex: 1, cursor: 'move', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: (selectedElement && selectedElement.bandName === bandName && selectedElement.bandIdx === bandIdx && selectedElement.elIdx === elIdx) ? '2px solid #007bff' : 'none' }}
+                                      onClick={e => { e.stopPropagation(); setSelectedElement({ bandName, bandIdx, elIdx }); }}
+                                    >
+                                      <span style={{ fontWeight: 'bold', fontSize: 40, fontFamily: 'Arial, sans-serif', textAlign: 'center', width: '100%' }}>{el.text}</span>
+                                    </Rnd>
+                                  );
+                                }
+                                return null;
+                              })}
                             </div>
                           ) : (bandName === 'columnHeader' || bandName === 'detail') ? (
                             <div style={{
@@ -686,27 +743,10 @@ function ReportVisualEditor() {
                                     position: 'relative',
                                     cursor: 'pointer',
                                   }}
-                                  onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
+                                  onClick={e => { e.stopPropagation(); setSelectedElement({ bandName, bandIdx, elIdx }); }}
                                 >
                                   {(el.type === 'staticText' || el.type === 'textField') ? (
-                                    selectedElement && selectedElement.bandName === bandName && selectedElement.bandIdx === bandIdx && selectedElement.elIdx === elIdx ? (
-                                      <input
-                                        value={el.text}
-                                        onChange={e => {
-                                          const value = e.target.value;
-                                          setBands(prev => {
-                                            const newBands = { ...prev };
-                                            newBands[bandName][bandIdx].elements[elIdx].text = value;
-                                            return newBands;
-                                          });
-                                        }}
-                                        onBlur={() => setSelectedElement(null)}
-                                        autoFocus
-                                        style={{ width: '90%', fontSize: el.fontSize, fontWeight: el.isBold ? 'bold' : 'normal', textAlign: bandName === 'columnHeader' ? 'center' : 'left', background: 'transparent', color: bandName === 'columnHeader' ? '#fff' : '#000', border: 'none' }}
-                                      />
-                                    ) : (
-                                      <span>{el.text}</span>
-                                    )
+                                    <span>{el.text}</span>
                                   ) : null}
                                   {/* Resizer handle for columnHeader and detail */}
                                   {elIdx < band.elements.length - 1 && (
@@ -746,7 +786,7 @@ function ReportVisualEditor() {
                                   justifyContent: 'center',
                                   cursor: 'pointer',
                                 }}
-                                onClick={() => setSelectedElement({ bandName, bandIdx, elIdx })}
+                                onClick={e => { e.stopPropagation(); setSelectedElement({ bandName, bandIdx, elIdx }); }}
                               >
                                 {el.type === 'staticText' && <span>{el.text}</span>}
                                 {el.type === 'textField' && <span>{el.text}</span>}
