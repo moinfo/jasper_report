@@ -305,7 +305,7 @@ function ReportVisualEditor() {
       <Card className="mt-3">
         <Card.Header>Edit Element</Card.Header>
         <Card.Body>
-          {el.type === 'staticText' || el.type === 'textField' ? (
+          {(el.type === 'staticText' || el.type === 'textField') && bandName !== 'detail' ? (
             <Form.Group className="mb-3">
               <Form.Label>Text</Form.Label>
               <Form.Control
@@ -326,6 +326,18 @@ function ReportVisualEditor() {
                   });
                 }}
               />
+            </Form.Group>
+          ) : null}
+          {(el.type === 'staticText' || el.type === 'textField') && bandName === 'detail' ? (
+            <Form.Group className="mb-3">
+              <Form.Label>Text</Form.Label>
+              <Form.Control
+                type="text"
+                value={el.text}
+                readOnly
+                style={{ background: '#eee', cursor: 'not-allowed' }}
+              />
+              <Form.Text muted>This is a variable and cannot be edited.</Form.Text>
             </Form.Group>
           ) : null}
           <Form.Group className="mb-3">
@@ -392,6 +404,7 @@ function ReportVisualEditor() {
           <DndProvider backend={HTML5Backend}>
             <Row>
               <Col md={3}>
+                {renderPropertyEditor()}
                 <Card className="mt-3">
                   <Card.Header>Style Settings</Card.Header>
                   <Card.Body>
@@ -404,7 +417,6 @@ function ReportVisualEditor() {
                     </Form.Group>
                   </Card.Body>
                 </Card>
-                {renderPropertyEditor()}
               </Col>
               <Col md={9}>
                 <div style={{
