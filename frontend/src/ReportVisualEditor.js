@@ -623,12 +623,36 @@ function ReportVisualEditor() {
                           ref={containerRef}
                         >
                           <div style={{ fontWeight: 'bold', fontSize: 13, color: '#888', marginBottom: 2 }}>{BAND_LABELS[bandName]}</div>
-                          {/* Editable/resizable table for columnHeader and detail bands */}
-                          {(bandName === 'columnHeader' || bandName === 'detail') ? (
+                          {/* PDF-matching layout for title band */}
+                          {bandName === 'title' ? (
                             <div style={{
                               display: 'flex',
                               flexDirection: 'row',
-                              background: bandName === 'columnHeader' ? '#343a40' : '#f8f9fa',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              height: 60,
+                              width: 555,
+                              margin: '0 auto',
+                            }}>
+                              <img src="/logo-right.png" alt="Logo Right" style={{ width: 60, height: 60 }} />
+                              <div style={{
+                                flex: 1,
+                                textAlign: 'center',
+                                fontWeight: 'bold',
+                                fontSize: 40,
+                                fontFamily: 'Arial, sans-serif',
+                              }}>
+                                Employee Report
+                              </div>
+                              <img src="/logo-left.png" alt="Logo Left" style={{ width: 60, height: 60 }} />
+                            </div>
+                          ) : (bandName === 'columnHeader' || bandName === 'detail') ? (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'row',
+                              width: 555,
+                              margin: '0 auto',
+                              background: bandName === 'columnHeader' ? '#343a40' : '#fff',
                               border: '1px solid #000',
                               height: band.height,
                             }}>
@@ -639,15 +663,16 @@ function ReportVisualEditor() {
                                     width: el.width,
                                     minWidth: 40,
                                     height: el.height,
-                                    borderRight: '1px solid #000',
+                                    borderRight: elIdx < band.elements.length - 1 ? '1px solid #000' : 'none',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: el.forecolor || (bandName === 'columnHeader' ? '#fff' : '#000'),
-                                    fontWeight: el.isBold ? 'bold' : 'normal',
+                                    justifyContent: bandName === 'columnHeader' ? 'center' : 'left',
+                                    color: bandName === 'columnHeader' ? '#fff' : '#000',
+                                    fontWeight: bandName === 'columnHeader' ? 'bold' : 'normal',
                                     fontSize: el.fontSize,
                                     background: el.backgroundColor,
-                                    textAlign: el.textAlignment?.toLowerCase() || 'center',
+                                    textAlign: bandName === 'columnHeader' ? 'center' : 'left',
+                                    paddingLeft: bandName === 'detail' ? 8 : 0,
                                     position: 'relative',
                                     cursor: 'pointer',
                                   }}
@@ -667,22 +692,13 @@ function ReportVisualEditor() {
                                         }}
                                         onBlur={() => setSelectedElement(null)}
                                         autoFocus
-                                        style={{ width: '90%', fontSize: el.fontSize, fontWeight: el.isBold ? 'bold' : 'normal', textAlign: el.textAlignment?.toLowerCase() || 'center', background: 'transparent', color: el.forecolor || (bandName === 'columnHeader' ? '#fff' : '#000'), border: 'none' }}
+                                        style={{ width: '90%', fontSize: el.fontSize, fontWeight: el.isBold ? 'bold' : 'normal', textAlign: bandName === 'columnHeader' ? 'center' : 'left', background: 'transparent', color: bandName === 'columnHeader' ? '#fff' : '#000', border: 'none' }}
                                       />
                                     ) : (
                                       <span>{el.text}</span>
                                     )
                                   ) : null}
-                                  {el.type === 'image' ? (
-                                    <img
-                                      src={el.imageExpr && el.imageExpr.includes('logoRight') ? '/logo-right.png' :
-                                           el.imageExpr && el.imageExpr.includes('logoLeft') ? '/logo-left.png' :
-                                           'https://via.placeholder.com/60'}
-                                      alt="Logo"
-                                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                    />
-                                  ) : null}
-                                  {/* Resizer handle */}
+                                  {/* Resizer handle for columnHeader and detail */}
                                   {elIdx < band.elements.length - 1 && (
                                     <div
                                       style={{
