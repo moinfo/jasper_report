@@ -128,7 +128,7 @@ const BandDropArea = ({ bandName, bandIdx, children, onDropElement }) => {
 function bandsToJrxml(bands) {
   // This is a minimal JRXML structure for demonstration. You can expand it as needed.
   function elementToXml(el) {
-    const base = `<reportElement x=\"${el.x}\" y=\"${el.y}\" width=\"${el.width}\" height=\"${el.height}\" />`;
+    const base = `<reportElement x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" />`;
     if (el.type === 'staticText') {
       return `<staticText>${base}<text><![CDATA[${el.text || ''}]]></text></staticText>`;
     }
@@ -144,14 +144,23 @@ function bandsToJrxml(bands) {
     return '';
   }
   function bandXml(band) {
-    return `<band height=\"100\">${band.elements.map(elementToXml).join('')}</band>`;
+    return `<band height="100">${band.elements.map(elementToXml).join('')}</band>`;
   }
   // Compose the JRXML
-  let jrxml = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<jasperReport name=\"VisualDesign\" pageWidth=\"595\" pageHeight=\"842\" columnWidth=\"555\" leftMargin=\"20\" rightMargin=\"20\" topMargin=\"20\" bottomMargin=\"20\">`;
+  let jrxml = `<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="VisualDesign" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+  <parameter name="logoRight" class="java.lang.String"/>
+  <parameter name="logoLeft" class="java.lang.String"/>
+  <field name="name" class="java.lang.String"/>
+  <field name="address" class="java.lang.String"/>
+  <field name="phone" class="java.lang.String"/>
+  <field name="gender" class="java.lang.String"/>
+`;
   for (const bandName of BAND_NAMES) {
     if (bands[bandName]) {
       bands[bandName].forEach(band => {
-        jrxml += `\n<${bandName}>${bandXml(band)}</${bandName}>`;
+        jrxml += `
+<${bandName}>${bandXml(band)}</${bandName}>`;
       });
     }
   }
@@ -174,6 +183,8 @@ function ReportVisualEditor() {
     borderColor: '#000000',
     borderWidth: '1px',
   });
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const handleShow = () => {
     setLoadingDesign(true);
@@ -201,7 +212,7 @@ function ReportVisualEditor() {
     setSaving(true);
     // Serialize bands/elements to JRXML
     const jrxml = bandsToJrxml(bands);
-    fetch("/api/reports/employees/design", {
+    fetch("/api/employees/preview-live", {
       method: "POST",
       headers: {
         "Content-Type": "text/plain",
@@ -390,6 +401,28 @@ function ReportVisualEditor() {
     );
   };
 
+  // Preview handler
+  const handlePreview = async () => {
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+    const jrxml = bandsToJrxml(bands);
+    try {
+      const response = await fetch('/api/employees/preview-live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: jrxml,
+      });
+      if (!response.ok) throw new Error('Failed to generate preview');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+    } catch (err) {
+      alert('Failed to generate preview: ' + err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <>
       <Button variant="primary" onClick={handleShow}>
@@ -417,6 +450,9 @@ function ReportVisualEditor() {
                     </Form.Group>
                   </Card.Body>
                 </Card>
+                <Button className="mt-3 w-100" variant="secondary" onClick={handlePreview} disabled={previewLoading}>
+                  {previewLoading ? 'Generating Preview...' : 'Preview'}
+                </Button>
               </Col>
               <Col md={9}>
                 <div style={{
@@ -472,6 +508,15 @@ function ReportVisualEditor() {
                     ))
                   ))}
                 </div>
+                {/* Preview Area */}
+                {previewUrl && (
+                  <div className="mt-4">
+                    <h5>Live Preview</h5>
+                    <object data={previewUrl} type="application/pdf" width="100%" height="600px">
+                      <p>PDF preview is not supported in this browser.</p>
+                    </object>
+                  </div>
+                )}
               </Col>
             </Row>
           </DndProvider>
