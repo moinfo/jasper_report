@@ -39,12 +39,24 @@ public class EmployeeReportController {
     }
 
     @PostMapping("/employees/design")
-    public ResponseEntity<Void> saveReportDesign(@RequestBody String designContent) {
+    public ResponseEntity<?> saveReportDesign(@RequestBody String designContent) {
         try {
+            System.out.println("Controller received design content with length: " + designContent.length());
+            
+            // Validate input
+            if (designContent == null || designContent.isBlank()) {
+                System.err.println("Error: Empty design content received");
+                return ResponseEntity.badRequest().body("Design content cannot be empty");
+            }
+            
             employeeReportService.saveReportDesign(designContent);
-            return ResponseEntity.ok().build();
+            
+            // Return a detailed success response with message
+            return ResponseEntity.ok().body("Design saved successfully");
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            System.err.println("Controller error while saving design: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Failed to save design: " + e.getMessage());
         }
     }
 } 

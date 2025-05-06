@@ -28,33 +28,86 @@ public class EmployeeReportService {
     private ReportDesignRepository reportDesignRepository;
 
     public String getReportDesign() throws Exception {
+        System.out.println("Getting report design from database...");
+        
         // First try to get from database
         Optional<ReportDesign> existingDesign = reportDesignRepository.findByReportName("employee_report");
         if (existingDesign.isPresent()) {
-            return existingDesign.get().getDesignContent();
+            ReportDesign design = existingDesign.get();
+            System.out.println("Found design in database with ID: " + design.getId());
+            System.out.println("Design content length: " + design.getDesignContent().length());
+            
+            // Validate that the content is not empty
+            if (design.getDesignContent() == null || design.getDesignContent().isBlank()) {
+                System.err.println("WARNING: Design found in database but content is empty!");
+            } else {
+                return design.getDesignContent();
+            }
+        } else {
+            System.out.println("No design found in database, loading default template");
         }
 
-        // If not in database, get from classpath
+        // If not in database or content is empty, get from classpath
         try (InputStream reportStream = new ClassPathResource("employee_report.jrxml").getInputStream()) {
             String defaultDesign = StreamUtils.copyToString(reportStream, StandardCharsets.UTF_8);
+            System.out.println("Loaded default design from classpath, length: " + defaultDesign.length());
             
             // Save default design to database
             ReportDesign reportDesign = new ReportDesign();
             reportDesign.setReportName("employee_report");
             reportDesign.setDesignContent(defaultDesign);
-            reportDesignRepository.save(reportDesign);
+            
+            ReportDesign savedDesign = reportDesignRepository.saveAndFlush(reportDesign);
+            System.out.println("Saved default design to database with ID: " + savedDesign.getId());
             
             return defaultDesign;
         }
     }
 
     public void saveReportDesign(String designContent) {
-        ReportDesign reportDesign = reportDesignRepository.findByReportName("employee_report")
-                .orElse(new ReportDesign());
-        
-        reportDesign.setReportName("employee_report");
-        reportDesign.setDesignContent(designContent);
-        reportDesignRepository.save(reportDesign);
+        try {
+            System.out.println("Saving design content with length: " + designContent.length());
+            System.out.println("First 100 chars: " + designContent.substring(0, Math.min(100, designContent.length())));
+            
+            // Try to find existing design
+            Optional<ReportDesign> existingDesignOpt = reportDesignRepository.findByReportName("employee_report");
+            
+            ReportDesign reportDesign;
+            if (existingDesignOpt.isPresent()) {
+                System.out.println("Found existing design with ID: " + existingDesignOpt.get().getId());
+                reportDesign = existingDesignOpt.get();
+            } else {
+                System.out.println("Creating new report design entity");
+                reportDesign = new ReportDesign();
+                reportDesign.setReportName("employee_report");
+            }
+            
+            // Set content and save
+            reportDesign.setDesignContent(designContent);
+            
+            // Ensure content is set properly
+            System.out.println("Content set in entity, length: " + reportDesign.getDesignContent().length());
+            
+            // Save and flush to ensure immediate persistence
+            ReportDesign savedDesign = reportDesignRepository.saveAndFlush(reportDesign);
+            
+            // Log success information
+            System.out.println("Saved design with ID: " + savedDesign.getId());
+            System.out.println("Saved content length: " + savedDesign.getDesignContent().length());
+            
+            // Verify saved design by immediately retrieving it
+            Optional<ReportDesign> verifyDesign = reportDesignRepository.findById(savedDesign.getId());
+            if (verifyDesign.isPresent()) {
+                System.out.println("Verification successful - design found in database");
+                System.out.println("Verified content length: " + verifyDesign.get().getDesignContent().length());
+            } else {
+                System.err.println("WARNING: Could not verify design was saved - not found in database!!!");
+            }
+        } catch (Exception e) {
+            System.err.println("Error saving report design: " + e.getMessage());
+            e.printStackTrace();
+            throw e; // rethrow to notify the controller
+        }
     }
 
     public byte[] exportEmployeeReport() throws Exception {

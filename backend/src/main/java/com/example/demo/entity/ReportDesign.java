@@ -14,7 +14,7 @@ public class ReportDesign {
     @Column(name = "report_name", nullable = false, unique = true)
     private String reportName;
 
-    @Column(name = "design_content", columnDefinition = "TEXT", nullable = false)
+    @Column(name = "design_content", columnDefinition = "LONGTEXT", nullable = false)
     private String designContent;
 
     @Column(name = "last_modified")
