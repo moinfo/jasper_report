@@ -65,8 +65,13 @@ public class EmployeeController {
 
             // Add parameters for logos
             Map<String, Object> params = new HashMap<>();
-            params.put("logoLeft", null);
-            params.put("logoRight", null);
+            
+            // Load logo images from resources
+            InputStream logoLeftStream = getClass().getResourceAsStream("/logo.png");
+            InputStream logoRightStream = getClass().getResourceAsStream("/organization_logo.png");
+            
+            params.put("logoLeft", logoLeftStream);
+            params.put("logoRight", logoRightStream);
 
             // Dummy data
             List<Map<String, Object>> data = new ArrayList<>();

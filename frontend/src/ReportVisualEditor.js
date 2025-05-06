@@ -1091,27 +1091,43 @@ function ReportVisualEditor() {
         }
     };
 
-    // Preview handler
+    // Preview handler - shows the saved design from the database
     const handlePreview = async () => {
         setPreviewLoading(true);
         setPreviewUrl(null);
-        const jrxml = bandsToJrxml(bands);
-
+        
         try {
-            const response = await fetch('/api/employees/preview-live', {
+            // First get the saved design from the database
+            const designResponse = await fetch('/api/reports/employees/preview');
+            
+            if (!designResponse.ok) {
+                throw new Error(`Error fetching design: ${designResponse.status} ${designResponse.statusText}`);
+            }
+            
+            const savedJrxml = await designResponse.text();
+            console.log("Fetched saved design from database");
+            
+            // Then generate preview using the saved design
+            const previewResponse = await fetch('/api/employees/preview-live', {
                 method: 'POST',
                 headers: {'Content-Type': 'text/plain'},
-                body: jrxml,
+                body: savedJrxml,
             });
 
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status} ${response.statusText}`);
+            if (!previewResponse.ok) {
+                throw new Error(`Server error: ${previewResponse.status} ${previewResponse.statusText}`);
             }
 
-            const blob = await response.blob();
+            const blob = await previewResponse.blob();
             const url = URL.createObjectURL(blob);
             setPreviewUrl(url);
             setShowPreview(true);
+            
+            // Set success message
+            setStatusMessage({text: 'Preview of saved design generated successfully!', type: 'success'});
+            
+            // Auto-clear success message after 2 seconds
+            setTimeout(() => setStatusMessage(null), 2000);
         } catch (err) {
             console.error("Failed to generate preview", err);
             setStatusMessage({text: 'Failed to generate preview: ' + err.message, type: 'danger'});
@@ -2149,33 +2165,49 @@ function ReportVisualEditor() {
                             {previewLoading ? (
                                 <div className="d-flex justify-content-center align-items-center flex-grow-1">
                                     <Spinner animation="border" variant="primary"/>
-                                    <span className="ms-2">Generating preview...</span>
+                                    <span className="ms-2">Generating preview with your latest changes...</span>
                                 </div>
                             ) : previewUrl ? (
-                                <object
-                                    data={previewUrl}
-                                    type="application/pdf"
-                                    width="100%"
-                                    height="100%"
-                                    className="flex-grow-1"
-                                >
-                                    <div className="alert alert-warning m-3">
-                                        <h4>PDF preview is not supported in this browser</h4>
-                                        <p>Please download the PDF to view it.</p>
+                                <div className="d-flex flex-column h-100">
+                                    <div className="bg-light p-2 border-bottom d-flex justify-content-between align-items-center">
+                                        <span className="text-muted">
+                                            <i className="bi bi-info-circle me-2"></i>
+                                            This preview shows the current saved design from the database
+                                        </span>
                                         <a
                                             href={previewUrl}
-                                            download="report-preview.pdf"
-                                            className="btn btn-primary"
+                                            download="employee_report_preview.pdf"
+                                            className="btn btn-sm btn-outline-primary"
                                         >
                                             <i className="bi bi-download me-2"></i>
                                             Download PDF
                                         </a>
                                     </div>
-                                </object>
+                                    <object
+                                        data={previewUrl}
+                                        type="application/pdf"
+                                        width="100%"
+                                        height="100%"
+                                        className="flex-grow-1"
+                                    >
+                                        <div className="alert alert-warning m-3">
+                                            <h4>PDF preview is not supported in this browser</h4>
+                                            <p>Please download the PDF to view it.</p>
+                                            <a
+                                                href={previewUrl}
+                                                download="employee_report_preview.pdf"
+                                                className="btn btn-primary"
+                                            >
+                                                <i className="bi bi-download me-2"></i>
+                                                Download PDF
+                                            </a>
+                                        </div>
+                                    </object>
+                                </div>
                             ) : (
                                 <div className="alert alert-warning m-3">
                                     <h4>No preview available</h4>
-                                    <p>Generate a preview to see your report.</p>
+                                    <p>Click "Preview Report" to see your saved report design from the database. Make sure to save your changes first if you want to see them in the preview.</p>
                                 </div>
                             )}
                         </div>
@@ -2363,12 +2395,12 @@ function ReportVisualEditor() {
                                         aria-hidden="true"
                                         className="me-2"
                                     />
-                                    Generating...
+                                    Loading Saved Design...
                                 </>
                             ) : (
                                 <>
                                     <i className="bi bi-eye me-2"></i>
-                                    Preview Report
+                                    Preview Saved Design
                                 </>
                             )}
                         </Button>
