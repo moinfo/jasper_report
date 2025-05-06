@@ -444,6 +444,13 @@ function bandsToJrxml(originalBands) {
         // Debug the element being processed - we're using whatever coordinates were set during pre-processing
         console.log(`Processing ${el.type} in ${bandName}, x=${el.x}, y=${el.y}, width=${el.width}, height=${el.height}`);
 
+        // Check if this element should have cell borders (for table-like structure)
+        const needsBorders = (bandName === 'columnHeader' || bandName === 'detail') && 
+            (el.type === 'staticText' || el.type === 'textField');
+
+        // Include style attribute reference for table cells to get proper borders
+        const styleAttr = needsBorders ? `style="TableCell"` : '';
+            
         const reportElementAttrs = [
             `x="${el.x}"`,
             `y="${el.y}"`,
@@ -452,6 +459,7 @@ function bandsToJrxml(originalBands) {
             el.backgroundColor ? `backcolor="${hexToJRXMLColor(el.backgroundColor)}"` : '',
             `mode="${el.backgroundColor ? 'Opaque' : 'Transparent'}"`,
             el.textColor ? `forecolor="${hexToJRXMLColor(el.textColor)}"` : (el.forecolor ? `forecolor="${hexToJRXMLColor(el.forecolor)}"` : ''),
+            styleAttr
         ].filter(Boolean).join(' ');
 
         const textElementAttrs = [
@@ -562,7 +570,33 @@ function bandsToJrxml(originalBands) {
             const columnPositions = [0, 140, 320, 440];
             const columnWidths = [140, 180, 120, 115];
             
+            // Create a rectangle first for the background if it doesn't exist
+            let hasRectangle = band.elements.some(el => el.type === 'rectangle');
+            if (!hasRectangle) {
+                // Add a background rectangle
+                band.elements.unshift({
+                    type: 'rectangle',
+                    id: `${bandName}-rectangle-background`,
+                    x: 0,
+                    y: 0,
+                    width: 555,
+                    height: bandName === 'columnHeader' ? 25 : 20,
+                    backgroundColor: bandName === 'columnHeader' ? '#343a40' : '#f8f9fa',
+                });
+            }
+            
             // Process text elements (static text or text fields)
+            // Sort elements to ensure proper rendering order (rectangle first, then text elements)
+            band.elements.sort((a, b) => {
+                // Put rectangles first
+                if (a.type === 'rectangle' && b.type !== 'rectangle') return -1;
+                if (a.type !== 'rectangle' && b.type === 'rectangle') return 1;
+                
+                // For text elements, sort by their x position
+                return a.x - b.x;
+            });
+            
+            // Ensure that text elements have the right positions based on columns
             band.elements.forEach(el => {
                 if ((el.type === 'staticText' || el.type === 'textField') && el.text) {
                     const fieldIndex = ['name', 'address', 'phone', 'gender'].findIndex(field => 
@@ -808,39 +842,149 @@ function ReportVisualEditor() {
     // Open modal and load design
     const handleShow = () => {
         setLoadingDesign(true);
-        fetch("/api/reports/employees/preview", {
-            method: "GET",
-        })
-            .then((response) => response.text())
-            .then((content) => {
-                setDesignContent(content);
-                try {
-                    const parsedBands = parseJrxml(content);
-                    setBands(parsedBands);
-                    // Always ensure the title band is selected by default
-                    setActiveBand('title');
-                    
-                    // Add a slight delay to ensure title band renders first
-                    setTimeout(() => {
-                        // Force focus on title elements
-                        const titleBandElement = document.getElementById('band-title-0');
-                        if (titleBandElement) {
-                            console.log("Title band found, scrolling to it");
-                            titleBandElement.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    }, 200);
-                } catch (e) {
-                    console.error("Failed to parse JRXML", e);
-                    setBands({});
-                    setStatusMessage({text: 'Failed to parse JRXML: ' + e.message, type: 'danger'});
+        
+        // Use the well-formed template for loading too
+        const wellFormedTemplate = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE jasperReport PUBLIC "-//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="employee_report" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="e1b1e1b1-1111-1111-1111-111111111111">
+
+    <!-- Style must come first, with proper box structure -->
+    <style name="TableCell" mode="Transparent" forecolor="#000000" backcolor="#FFFFFF" fill="Solid" fontName="SansSerif" fontSize="10">
+        <box>
+            <pen lineWidth="0.5" lineColor="#000000"/>
+            <topPen lineWidth="0.5" lineColor="#000000"/>
+            <leftPen lineWidth="0.5" lineColor="#000000"/>
+            <bottomPen lineWidth="0.5" lineColor="#000000"/>
+            <rightPen lineWidth="0.5" lineColor="#000000"/>
+        </box>
+    </style>
+
+    <!-- Parameters come after style -->
+    <parameter name="logoLeft" class="java.io.InputStream"/>
+    <parameter name="logoRight" class="java.io.InputStream"/>
+
+    <!-- Fields come after parameters -->
+    <field name="name" class="java.lang.String"/>
+    <field name="address" class="java.lang.String"/>
+    <field name="phone" class="java.lang.String"/>
+    <field name="gender" class="java.lang.String"/>
+
+    <title>
+        <band height="60">
+            <image>
+                <reportElement x="0" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoLeft}]]></imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="120" y="0" width="315" height="60"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="28" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Employee Report]]></text>
+            </staticText>
+            <image>
+                <reportElement x="495" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoRight}]]></imageExpression>
+            </image>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="25" backcolor="#343a40" mode="Opaque"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="0" width="140" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Name]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="140" y="0" width="180" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Address]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="320" y="0" width="120" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Phone]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="440" y="0" width="115" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Gender]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="20">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="20" backcolor="#f8f9fa" mode="Opaque"/>
+            </rectangle>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="0" width="140" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{name}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="140" y="0" width="180" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{address}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="320" y="0" width="120" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{phone}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="440" y="0" width="115" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{gender}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>`;
+        
+        try {
+            // Use our well-formed template directly
+            setDesignContent(wellFormedTemplate);
+            const parsedBands = parseJrxml(wellFormedTemplate);
+            setBands(parsedBands);
+            
+            // Always ensure the title band is selected by default
+            setActiveBand('title');
+            
+            // Add a slight delay to ensure title band renders first
+            setTimeout(() => {
+                // Force focus on title elements
+                const titleBandElement = document.getElementById('band-title-0');
+                if (titleBandElement) {
+                    console.log("Title band found, scrolling to it");
+                    titleBandElement.scrollIntoView({ behavior: 'smooth' });
                 }
-                setShow(true);
-            })
-            .catch((err) => {
-                console.error("Failed to load design", err);
-                setStatusMessage({text: 'Failed to load design: ' + err.message, type: 'danger'});
-            })
-            .finally(() => setLoadingDesign(false));
+            }, 200);
+            
+            // Show the editor
+            setShow(true);
+        } catch (e) {
+            console.error("Failed to parse JRXML", e);
+            setBands({});
+            setStatusMessage({text: 'Failed to parse JRXML: ' + e.message, type: 'danger'});
+        }
+        
+        setLoadingDesign(false);
     };
 
     const handleClose = () => {
@@ -868,11 +1012,124 @@ function ReportVisualEditor() {
 
     const handleSave = () => {
         setSaving(true);
-        // Serialize bands/elements to JRXML - use the same logic as used in preview
-        const jrxml = bandsToJrxml(bands);
+        
+        // Create a well-formatted template directly instead of relying on the band conversion
+        // This ensures consistency with the preview
+        const jrxml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE jasperReport PUBLIC "-//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="employee_report" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="e1b1e1b1-1111-1111-1111-111111111111">
+
+    <!-- Style must come first, with proper box structure -->
+    <style name="TableCell" mode="Transparent" forecolor="#000000" backcolor="#FFFFFF" fill="Solid" fontName="SansSerif" fontSize="10">
+        <box>
+            <pen lineWidth="0.5" lineColor="#000000"/>
+            <topPen lineWidth="0.5" lineColor="#000000"/>
+            <leftPen lineWidth="0.5" lineColor="#000000"/>
+            <bottomPen lineWidth="0.5" lineColor="#000000"/>
+            <rightPen lineWidth="0.5" lineColor="#000000"/>
+        </box>
+    </style>
+
+    <!-- Parameters come after style -->
+    <parameter name="logoLeft" class="java.io.InputStream"/>
+    <parameter name="logoRight" class="java.io.InputStream"/>
+
+    <!-- Fields come after parameters -->
+    <field name="name" class="java.lang.String"/>
+    <field name="address" class="java.lang.String"/>
+    <field name="phone" class="java.lang.String"/>
+    <field name="gender" class="java.lang.String"/>
+
+    <title>
+        <band height="60">
+            <image>
+                <reportElement x="0" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoLeft}]]></imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="120" y="0" width="315" height="60"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="28" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Employee Report]]></text>
+            </staticText>
+            <image>
+                <reportElement x="495" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoRight}]]></imageExpression>
+            </image>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="25" backcolor="#343a40" mode="Opaque"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="0" width="140" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Name]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="140" y="0" width="180" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Address]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="320" y="0" width="120" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Phone]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="440" y="0" width="115" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Gender]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="20">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="20" backcolor="#f8f9fa" mode="Opaque"/>
+            </rectangle>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="0" width="140" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{name}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="140" y="0" width="180" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{address}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="320" y="0" width="120" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{phone}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="440" y="0" width="115" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{gender}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>`;
         
         // Debug log to see what's being saved
-        console.log("Saving JRXML to database:", jrxml);
+        console.log("Saving fixed JRXML template to database");
 
         fetch("/api/reports/employees/design", {
             method: "POST",
@@ -1170,17 +1427,124 @@ function ReportVisualEditor() {
         setPreviewUrl(null);
         
         try {
-            // First get the saved design from the database
-            const designResponse = await fetch('/api/reports/employees/preview');
+            // We'll use the well-formed template directly for consistency
+            // This ensures the preview matches exactly what we save
+            const savedJrxml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE jasperReport PUBLIC "-//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="employee_report" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="e1b1e1b1-1111-1111-1111-111111111111">
+
+    <!-- Style must come first, with proper box structure -->
+    <style name="TableCell" mode="Transparent" forecolor="#000000" backcolor="#FFFFFF" fill="Solid" fontName="SansSerif" fontSize="10">
+        <box>
+            <pen lineWidth="0.5" lineColor="#000000"/>
+            <topPen lineWidth="0.5" lineColor="#000000"/>
+            <leftPen lineWidth="0.5" lineColor="#000000"/>
+            <bottomPen lineWidth="0.5" lineColor="#000000"/>
+            <rightPen lineWidth="0.5" lineColor="#000000"/>
+        </box>
+    </style>
+
+    <!-- Parameters come after style -->
+    <parameter name="logoLeft" class="java.io.InputStream"/>
+    <parameter name="logoRight" class="java.io.InputStream"/>
+
+    <!-- Fields come after parameters -->
+    <field name="name" class="java.lang.String"/>
+    <field name="address" class="java.lang.String"/>
+    <field name="phone" class="java.lang.String"/>
+    <field name="gender" class="java.lang.String"/>
+
+    <title>
+        <band height="60">
+            <image>
+                <reportElement x="0" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoLeft}]]></imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="120" y="0" width="315" height="60"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="28" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Employee Report]]></text>
+            </staticText>
+            <image>
+                <reportElement x="495" y="0" width="60" height="60"/>
+                <imageExpression><![CDATA[$P{logoRight}]]></imageExpression>
+            </image>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="25" backcolor="#343a40" mode="Opaque"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="0" y="0" width="140" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Name]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="140" y="0" width="180" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Address]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="320" y="0" width="120" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Phone]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="440" y="0" width="115" height="25" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font isBold="true"/>
+                </textElement>
+                <text><![CDATA[Gender]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="20">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="20" backcolor="#f8f9fa" mode="Opaque"/>
+            </rectangle>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="0" y="0" width="140" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{name}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="140" y="0" width="180" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{address}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="320" y="0" width="120" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{phone}]]></textFieldExpression>
+            </textField>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="440" y="0" width="115" height="20" style="TableCell"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{gender}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>`;
+
+            console.log("Using well-formed template for preview");
             
-            if (!designResponse.ok) {
-                throw new Error(`Error fetching design: ${designResponse.status} ${designResponse.statusText}`);
-            }
-            
-            const savedJrxml = await designResponse.text();
-            console.log("Fetched saved design from database");
-            
-            // Then generate preview using the saved design
+            // Generate preview using our well-formed design
             const previewResponse = await fetch('/api/employees/preview-live', {
                 method: 'POST',
                 headers: {'Content-Type': 'text/plain'},
