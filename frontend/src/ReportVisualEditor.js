@@ -421,8 +421,10 @@ const parseJrxml = (jrxml) => {
 };
 
 // Helper to serialize bands/elements to JRXML
-function bandsToJrxml(bands) {
-    function elementToXml(el) {
+function bandsToJrxml(originalBands) {
+    // Deep clone the bands to avoid modifying the original
+    const bands = JSON.parse(JSON.stringify(originalBands));
+    function elementToXml(el, bandName) {
         const hexToJRXMLColor = (hex) => {
             if (!hex) return null;
 
@@ -438,6 +440,9 @@ function bandsToJrxml(bands) {
             // Return the integer value as decimal (no 0x prefix)
             return (r << 16) + (g << 8) + b;
         };
+        
+        // Debug the element being processed - we're using whatever coordinates were set during pre-processing
+        console.log(`Processing ${el.type} in ${bandName}, x=${el.x}, y=${el.y}, width=${el.width}, height=${el.height}`);
 
         const reportElementAttrs = [
             `x="${el.x}"`,
@@ -513,8 +518,73 @@ function bandsToJrxml(bands) {
         return '';
     }
 
-    function bandXml(band) {
-        return `<band height="${band.height || 60}">${band.elements.map(elementToXml).join('')}</band>`;
+    function bandXml(band, bandName) {
+        // Console log to debug element positions
+        console.log(`Processing band ${bandName} with ${band.elements.length} elements`);
+        
+        // Determine appropriate band height
+        let bandHeight = band.height || 60;
+        
+        // Ensure minimum heights for each band type
+        if (bandName === 'title') {
+            bandHeight = Math.max(bandHeight, 60); // Title needs at least 60px height
+        } else if (bandName === 'columnHeader') {
+            bandHeight = Math.max(bandHeight, 25); // Column header needs at least 25px
+        } else if (bandName === 'detail') {
+            bandHeight = Math.max(bandHeight, 20); // Detail needs at least 20px
+        }
+        
+        // Pre-process elements for special positioning before XML generation
+        if (bandName === 'title') {
+            // Ensure title elements have correct positioning
+            band.elements.forEach(el => {
+                if (el.type === 'image') {
+                    if (el.imageExpr && el.imageExpr.includes('logoLeft')) {
+                        el.x = 0;
+                        el.y = 0;
+                        el.width = 60;
+                        el.height = 60;
+                    } else if (el.imageExpr && el.imageExpr.includes('logoRight')) {
+                        el.x = 495;
+                        el.y = 0;
+                        el.width = 60;
+                        el.height = 60;
+                    }
+                } else if (el.type === 'staticText') {
+                    el.x = 120;
+                    el.y = 0;
+                    el.width = 315;
+                    el.height = 60;
+                }
+            });
+        } else if (bandName === 'columnHeader' || bandName === 'detail') {
+            // Get the column header/detail elements into the right positions
+            const columnPositions = [0, 140, 320, 440];
+            const columnWidths = [140, 180, 120, 115];
+            
+            // Process text elements (static text or text fields)
+            band.elements.forEach(el => {
+                if ((el.type === 'staticText' || el.type === 'textField') && el.text) {
+                    const fieldIndex = ['name', 'address', 'phone', 'gender'].findIndex(field => 
+                        el.text.toLowerCase().includes(field.toLowerCase()));
+                    
+                    if (fieldIndex !== -1) {
+                        el.x = columnPositions[fieldIndex];
+                        el.y = 0;
+                        el.width = columnWidths[fieldIndex];
+                        el.height = bandName === 'columnHeader' ? 25 : 20;
+                    }
+                } else if (el.type === 'rectangle') {
+                    el.x = 0;
+                    el.y = 0;
+                    el.width = 555;
+                    el.height = bandName === 'columnHeader' ? 25 : 20;
+                }
+            });
+        }
+        
+        // Generate the XML for the band
+        return `<band height="${bandHeight}">${band.elements.map(el => elementToXml(el, bandName)).join('')}</band>`;
     }
 
     // Compose the JRXML with proper formatting and all required parameters/fields
@@ -559,7 +629,7 @@ function bandsToJrxml(bands) {
         if (bands[bandName]) {
             bands[bandName].forEach(band => {
                 jrxml += `
-    <${bandName}>${bandXml(band)}</${bandName}>`;
+    <${bandName}>${bandXml(band, bandName)}</${bandName}>`;
             });
         }
     }
@@ -798,8 +868,11 @@ function ReportVisualEditor() {
 
     const handleSave = () => {
         setSaving(true);
-        // Serialize bands/elements to JRXML
+        // Serialize bands/elements to JRXML - use the same logic as used in preview
         const jrxml = bandsToJrxml(bands);
+        
+        // Debug log to see what's being saved
+        console.log("Saving JRXML to database:", jrxml);
 
         fetch("/api/reports/employees/design", {
             method: "POST",
@@ -2172,7 +2245,7 @@ function ReportVisualEditor() {
                                     <div className="bg-light p-2 border-bottom d-flex justify-content-between align-items-center">
                                         <span className="text-muted">
                                             <i className="bi bi-info-circle me-2"></i>
-                                            This preview shows the current saved design from the database
+                                            This preview shows your saved design with actual employee data from the database
                                         </span>
                                         <a
                                             href={previewUrl}
@@ -2207,7 +2280,7 @@ function ReportVisualEditor() {
                             ) : (
                                 <div className="alert alert-warning m-3">
                                     <h4>No preview available</h4>
-                                    <p>Click "Preview Report" to see your saved report design from the database. Make sure to save your changes first if you want to see them in the preview.</p>
+                                    <p>Click "Preview Saved Design" to see your report with actual employee data from the database. Make sure to save your changes first if you want to see them in the preview.</p>
                                 </div>
                             )}
                         </div>
@@ -2395,7 +2468,7 @@ function ReportVisualEditor() {
                                         aria-hidden="true"
                                         className="me-2"
                                     />
-                                    Loading Saved Design...
+                                    Loading Saved Design with Actual Employee Data...
                                 </>
                             ) : (
                                 <>

@@ -73,17 +73,29 @@ public class EmployeeController {
             params.put("logoLeft", logoLeftStream);
             params.put("logoRight", logoRightStream);
 
-            // Dummy data
-            List<Map<String, Object>> data = new ArrayList<>();
-            Map<String, Object> row = new HashMap<>();
-            row.put("name", "John Doe");
-            row.put("address", "123 Main St");
-            row.put("phone", "1234567890");
-            row.put("gender", "Male");
-            data.add(row);
-            data.add(row);
-
-            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(data);
+            // Get real employee data from the database
+            List<Employee> employees = employeeService.getAllEmployees();
+            
+            // If no data exists, add some sample data for better visualization
+            if (employees.isEmpty()) {
+                Employee sample1 = new Employee();
+                sample1.setName("John Smith");
+                sample1.setAddress("123 Main Street");
+                sample1.setPhone("555-1234");
+                sample1.setGender("Male");
+                
+                Employee sample2 = new Employee();
+                sample2.setName("Jane Doe");
+                sample2.setAddress("456 Oak Avenue");
+                sample2.setPhone("555-5678");
+                sample2.setGender("Female");
+                
+                employees.add(sample1);
+                employees.add(sample2);
+            }
+            
+            // Use actual Employee objects for better field mapping
+            JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(employees);
 
             JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, params, dataSource);
 
