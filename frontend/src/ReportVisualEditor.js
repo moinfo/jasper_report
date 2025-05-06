@@ -11,12 +11,12 @@ const BAND_NAMES = ['title', 'pageHeader', 'columnHeader', 'detail', 'columnFoot
 const AUTO_ARRANGE_BANDS = ['title', 'columnHeader', 'detail'];
 const BAND_LABELS = {
     title: 'Title',
-    pageHeader: 'Page Header',
+    // pageHeader: 'Page Header',
     columnHeader: 'Column Header',
     detail: 'Detail',
-    columnFooter: 'Column Footer',
-    pageFooter: 'Page Footer',
-    summary: 'Summary',
+    // columnFooter: 'Column Footer',
+    // pageFooter: 'Page Footer',
+    // summary: 'Summary',
 };
 
 // Default field configurations
