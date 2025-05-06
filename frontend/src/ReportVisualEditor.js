@@ -22,7 +22,7 @@ const BAND_LABELS = {
 // Default field configurations
 const DEFAULT_FIELD_CONFIGS = {
     title: {
-        staticText: {width: 435, height: 60, x: 60, y: 0},
+        staticText: {width: 315, height: 60, x: 120, y: 0},
         image: {width: 60, height: 60, x: 0, y: 0},
         line: {width: 555, height: 2, x: 0, y: 58}
     },
@@ -226,6 +226,9 @@ const parseJrxml = (jrxml) => {
 
         const result = parser.parse(jrxml);
         const bands = {};
+        
+        // Ensure we have a console log for debugging
+        console.log("Parsing JRXML template:", result);
 
         BAND_NAMES.forEach(bandName => {
             const bandData = result?.jasperReport?.[bandName];
@@ -744,6 +747,18 @@ function ReportVisualEditor() {
                 try {
                     const parsedBands = parseJrxml(content);
                     setBands(parsedBands);
+                    // Always ensure the title band is selected by default
+                    setActiveBand('title');
+                    
+                    // Add a slight delay to ensure title band renders first
+                    setTimeout(() => {
+                        // Force focus on title elements
+                        const titleBandElement = document.getElementById('band-title-0');
+                        if (titleBandElement) {
+                            console.log("Title band found, scrolling to it");
+                            titleBandElement.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }, 200);
                 } catch (e) {
                     console.error("Failed to parse JRXML", e);
                     setBands({});
@@ -921,7 +936,7 @@ function ReportVisualEditor() {
                         y = 0;
                     } else if (type === 'staticText') {
                         // Center title text
-                        x = 60;
+                        x = 120;
                         y = 0;
                     }
                 }
@@ -1483,8 +1498,8 @@ function ReportVisualEditor() {
                                 }}
                             >
                                 <option value="">Select image source</option>
-                                <option value="$P{logoLeft}">Left Logo ($P{logoLeft})</option>
-                                <option value="$P{logoRight}">Right Logo ($P{logoRight})</option>
+                                <option value="$P{logoLeft}">Left Logo ($P&#123;logoLeft&#125;)</option>
+                                <option value="$P{logoRight}">Right Logo ($P&#123;logoRight&#125;)</option>
                             </Form.Select>
                         </Form.Group>
                     )}
@@ -1854,7 +1869,16 @@ function ReportVisualEditor() {
         const band = bands[bandName]?.[bandIdx];
         if (!band) return null;
 
+        // Debug output to see what elements are in the title band
+        if (bandName === 'title') {
+            console.log(`Title band elements (${band.elements.length}):`);
+            band.elements.forEach((el, idx) => {
+                console.log(`Element ${idx}: type=${el.type}, x=${el.x}, y=${el.y}, width=${el.width}, height=${el.height}, imageExpr=${el.imageExpr || 'none'}`);
+            });
+        }
+
         const isColumnHeaderOrDetail = bandName === 'columnHeader' || bandName === 'detail';
+        const isTitleBand = bandName === 'title';
 
         return (
             <BandDropArea
@@ -1889,8 +1913,97 @@ function ReportVisualEditor() {
                         {BAND_LABELS[bandName]}
                     </div>
 
-                    {/* Special layout for columnHeader and detail bands */}
-                    {isColumnHeaderOrDetail ? (
+                    {/* Special layout for title band */}
+                    {isTitleBand ? (
+                        <div style={{
+                            position: 'relative',
+                            width: 555,
+                            height: band.height || 60,
+                            margin: '0 auto',
+                            border: '1px dashed #ccc',
+                            background: '#fff',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '5px'
+                        }}>
+                            {band.elements.length === 0 ? (
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#777'
+                                    }}
+                                >
+                                    Drop elements here
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Left Logo - Find the first image element with logoLeft */}
+                                    {band.elements.find(el => el.type === 'image' && el.imageExpr && el.imageExpr.includes('logoLeft')) && (
+                                        <div style={{ width: '60px', height: '60px', flex: '0 0 auto' }}>
+                                            <img 
+                                                src="/logo.png" 
+                                                alt="Left Logo" 
+                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const elIdx = band.elements.findIndex(el => el.type === 'image' && el.imageExpr && el.imageExpr.includes('logoLeft'));
+                                                    if (elIdx >= 0) {
+                                                        setSelectedElement({bandName, bandIdx, elIdx});
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Title Text - Find the first staticText element */}
+                                    {band.elements.find(el => el.type === 'staticText') && (
+                                        <div 
+                                            style={{ 
+                                                flex: '1 1 auto', 
+                                                textAlign: 'center',
+                                                fontSize: '28px',
+                                                fontWeight: 'bold',
+                                                padding: '0 10px'
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const elIdx = band.elements.findIndex(el => el.type === 'staticText');
+                                                if (elIdx >= 0) {
+                                                    setSelectedElement({bandName, bandIdx, elIdx});
+                                                }
+                                            }}
+                                        >
+                                            {band.elements.find(el => el.type === 'staticText')?.text || 'Employee Report'}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Right Logo - Find the first image element with logoRight */}
+                                    {band.elements.find(el => el.type === 'image' && el.imageExpr && el.imageExpr.includes('logoRight')) && (
+                                        <div style={{ width: '60px', height: '60px', flex: '0 0 auto' }}>
+                                            <img 
+                                                src="/organization_logo.png" 
+                                                alt="Right Logo" 
+                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const elIdx = band.elements.findIndex(el => el.type === 'image' && el.imageExpr && el.imageExpr.includes('logoRight'));
+                                                    if (elIdx >= 0) {
+                                                        setSelectedElement({bandName, bandIdx, elIdx});
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    ) : isColumnHeaderOrDetail ? (
                         <div style={{
                             display: 'flex',
                             flexDirection: 'row',
@@ -2124,16 +2237,22 @@ function ReportVisualEditor() {
                                             onSelect={bandName => setActiveBand(bandName)}
                                             className="mb-3"
                                         >
-                                            {BAND_NAMES.map(bandName => (
+                                            {Object.keys(BAND_LABELS).map(bandName => (
                                                 <Nav.Item key={bandName}>
-                                                    <Nav.Link eventKey={bandName}>
+                                                    <Nav.Link 
+                                                        eventKey={bandName}
+                                                        style={{
+                                                            fontWeight: bandName === 'title' ? 'bold' : 'normal',
+                                                            color: bandName === 'title' ? '#007bff' : ''
+                                                        }}
+                                                    >
                                                         {BAND_LABELS[bandName]}
                                                     </Nav.Link>
                                                 </Nav.Item>
                                             ))}
                                         </Nav>
 
-                                        {/* Render active band */}
+                                        {/* Render all bands */}
                                         <div
                                             style={{
                                                 position: 'relative',
@@ -2143,7 +2262,16 @@ function ReportVisualEditor() {
                                                 borderRadius: '0 0 0.25rem 0.25rem',
                                             }}
                                         >
-                                            {renderBand(activeBand, 0)}
+                                            {Object.keys(BAND_LABELS).map(bandName => (
+                                                <div 
+                                                    key={bandName} 
+                                                    style={{
+                                                        display: bandName === activeBand ? 'block' : 'none'
+                                                    }}
+                                                >
+                                                    {renderBand(bandName, 0)}
+                                                </div>
+                                            ))}
                                         </div>
 
                                         {/* Developer section for JRXML preview */}

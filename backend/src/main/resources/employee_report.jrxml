@@ -33,7 +33,7 @@
                 <imageExpression><![CDATA[$P{logoLeft}]]></imageExpression>
             </image>
             <staticText>
-                <reportElement x="60" y="0" width="435" height="60"/>
+                <reportElement x="120" y="0" width="315" height="60"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="28" isBold="true"/>
                 </textElement>
