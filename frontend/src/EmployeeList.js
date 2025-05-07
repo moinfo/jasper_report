@@ -62,7 +62,7 @@ function EmployeeList() {
           <ReportVisualEditor />
           <ReportTemplateEditor />
           <button className="btn btn-primary me-2" onClick={handlePreview}>
-            Preview Report
+            Preview Jrxml Report
           </button>
           <button className="btn btn-danger me-2" onClick={() => handleExport("pdf")}>
             Export PDF

@@ -2332,7 +2332,7 @@ function ReportVisualEditor() {
                 <Modal.Header closeButton>
                     <Modal.Title>
                         <i className="bi bi-file-earmark-pdf me-2"></i>
-                        JasperReports Visual Editor
+                         Visual Report Editor
                     </Modal.Title>
                 </Modal.Header>
 

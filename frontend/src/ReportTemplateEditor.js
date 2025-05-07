@@ -50,12 +50,12 @@ function ReportTemplateEditor() {
   return (
     <>
       <Button variant="primary" onClick={handleShow}>
-        Edit Report Design
+        Edit Jrxml Report Design
       </Button>
 
       <Modal show={show} onHide={handleClose} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>Edit Report Design</Modal.Title>
+          <Modal.Title>Edit Jrxml Report Design</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <AceEditor
